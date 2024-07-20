@@ -11,10 +11,12 @@ import keyboard
 import json
 import os
 
+#Fix unicode escape in the template
+
 # User Configuration Section
-SELENIUM_DRIVER_PATH = 'C:\\Users\\Desktop\\msedgedriver.exe'  # Update your Selenium Driver
-DEFAULT_URL = "https://www.google.com" # Your Default opening URL for detection
-OUTPUT_FILE_NAME = "web_automation_script.py" # Your name of the script (default save location is in desktop)
+SELENIUM_DRIVER_PATH = r'C:\Users\Desktop\msedgedriver.exe'  # Update this path
+DEFAULT_URL = "https://www.google.com"
+OUTPUT_FILE_NAME = "web_automation_script.txt"
 
 class CombinedAutomationApp:
     def __init__(self, master):
@@ -345,7 +347,7 @@ from selenium.webdriver.edge.options import Options
 from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
 
 # Configuration
-WEBDRIVER_PATH = '{0}'  # Update this path if needed
+WEBDRIVER_PATH = r'{0}'  # Update this path if needed
 WAIT_TIME = 1
 RETRY_ATTEMPTS = 5
 DEBUG = True
@@ -459,7 +461,7 @@ def perform_action(action):
         key = send_key(action["key"])
         logger.info(f"Pressing key: {{action['key']}}")
         ActionChains(driver).send_keys(key).perform()
-    time.sleep(0.2)  # Small delay between actions
+    time.sleep(0.6)  # Small delay between actions
 
 def main():
     try:
