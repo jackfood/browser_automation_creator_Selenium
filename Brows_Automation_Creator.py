@@ -424,14 +424,14 @@ from typing import Callable, Dict, Any
 
 # Configuration
 SCRIPT_ID = "{script_id}"
-WEBDRIVER_PATH = r"{SELENIUM_DRIVER_PATH}"
+WEBDRIVER_PATH = r"C:\\Users\\Peter-Susan\\Desktop\\msedgedriver.exe"
 WAIT_TIME = 5
 RETRY_ATTEMPTS = 3
 DEBUG = True
 
 # Setup logging
 DESKTOP_PATH = os.path.join(os.path.expanduser('~'), 'Desktop')
-LOG_FOLDER = os.path.join(DESKTOP_PATH, 'automation log')
+LOG_FOLDER = os.path.join(DESKTOP_PATH, 'automation_log')
 if not os.path.exists(LOG_FOLDER):
     os.makedirs(LOG_FOLDER)
 LOG_FILE = os.path.join(LOG_FOLDER, f"web_automation_{{SCRIPT_ID}}.log")
@@ -444,116 +444,129 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Action definitions
-actions = {actions_json}
+class WebAutomation:
+    def __init__(self, driver_path: str):
+        self.driver_path = driver_path
+        self.driver = self.setup_webdriver()
 
-def wait_for_element(driver: webdriver.Edge, selector: str, condition: Callable, timeout: int = WAIT_TIME) -> Any:
-    logger.debug(f"Waiting for element: {{selector}}")
-    return WebDriverWait(driver, timeout).until(condition((By.CSS_SELECTOR, selector)))
+    def setup_webdriver(self):
+        service = Service(executable_path=self.driver_path)
+        edge_options = Options()
+        edge_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        edge_options.add_experimental_option('useAutomationExtension', False)
+        edge_options.add_argument("inprivate")
+        edge_options.add_experimental_option("prefs", {{"profile.default_content_setting_values.notifications": 2}})
+        driver = webdriver.Edge(service=service, options=edge_options)
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}})")
+        return driver
 
-def scroll_into_view(driver: webdriver.Edge, selector: str, by: By = By.CSS_SELECTOR) -> None:
-    logger.debug(f"Scrolling element into view: {{selector}}")
-    element = driver.find_element(by, selector)
-    driver.execute_script("arguments[0].scrollIntoView({{block: 'center'}});", element)
-    time.sleep(0.5)  # Allow time for scrolling animation
+    def wait_for_element(self, selector: str, condition: Callable, timeout: int = WAIT_TIME) -> Any:
+        logger.debug(f"Waiting for element: {{selector}}")
+        return WebDriverWait(self.driver, timeout).until(condition((By.CSS_SELECTOR, selector)))
 
-def retry_on_stale(func: Callable) -> Callable:
-    def wrapper(*args, **kwargs):
-        for attempt in range(RETRY_ATTEMPTS):
-            try:
-                return func(*args, **kwargs)
-            except StaleElementReferenceException:
-                logger.warning(f"Stale element reference exception. Retrying (attempt {{attempt + 1}}/{{RETRY_ATTEMPTS}})")
-                time.sleep(1)  # Add a small delay before retrying
-                if attempt == RETRY_ATTEMPTS - 1:
-                    raise
-    return wrapper
+    def scroll_into_view(self, selector: str, by: By = By.CSS_SELECTOR) -> None:
+        logger.debug(f"Scrolling element into view: {{selector}}")
+        element = self.driver.find_element(by, selector)
+        self.driver.execute_script("arguments[0].scrollIntoView({{block: 'center'}});", element)
+        time.sleep(0.5)  # Allow time for scrolling animation
 
-@retry_on_stale
-def wait_and_click(driver: webdriver.Edge, action: Dict[str, Any]) -> None:
-    selector = action["selector"]
-    by = action.get("by", By.CSS_SELECTOR)
-    timeout = action.get("timeout", WAIT_TIME)
-    scroll = action.get("scroll", True)
+    def retry_on_stale(func: Callable) -> Callable:
+        def wrapper(*args, **kwargs):
+            for attempt in range(RETRY_ATTEMPTS):
+                try:
+                    return func(*args, **kwargs)
+                except StaleElementReferenceException:
+                    logger.warning(f"Stale element reference exception. Retrying (attempt {{attempt + 1}}/{{RETRY_ATTEMPTS}})")
+                    time.sleep(1)  # Add a small delay before retrying
+                    if attempt == RETRY_ATTEMPTS - 1:
+                        raise
+        return wrapper
 
-    if scroll:
-        scroll_into_view(driver, selector, by)
+    @retry_on_stale
+    def wait_and_click(self, action: Dict[str, Any]) -> None:
+        selector = action["selector"]
+        by = action.get("by", By.CSS_SELECTOR)
+        timeout = action.get("timeout", WAIT_TIME)
+        scroll = action.get("scroll", True)
 
-    try:
-        element = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((by, selector)))
-        logger.info(f"Clicking element: {{selector}}")
-        element.click()
-    except TimeoutException:
-        logger.error(f"Element not clickable: {{selector}}")
-        raise
+        if scroll:
+            self.scroll_into_view(selector, by)
 
-@retry_on_stale
-def wait_and_input(driver: webdriver.Edge, selector: str, text: str) -> None:
-    scroll_into_view(driver, selector)
-    element = wait_for_element(driver, selector, EC.element_to_be_clickable)
-    logger.info(f"Inputting text: {{text}}")
-    element.clear()
-    element.send_keys(text)
+        try:
+            element = WebDriverWait(self.driver, timeout).until(EC.element_to_be_clickable((by, selector)))
+            logger.info(f"Clicking element: {{selector}}")
+            element.click()
+        except TimeoutException:
+            logger.error(f"Element not clickable: {{selector}}")
+            raise
 
-@retry_on_stale
-def wait_and_select(driver: webdriver.Edge, selector: str, text: str) -> None:
-    scroll_into_view(driver, selector)
-    dropdown = wait_for_element(driver, selector, EC.element_to_be_clickable)
-    select = Select(dropdown)
-    logger.info(f"Selecting option: {{text}}")
-    select.select_by_visible_text(text)
+    @retry_on_stale
+    def wait_and_input(self, selector: str, text: str) -> None:
+        self.scroll_into_view(selector)
+        element = self.wait_for_element(selector, EC.element_to_be_clickable)
+        logger.info(f"Inputting text: {{text}}")
+        element.clear()
+        element.send_keys(text)
 
-def wait_and_relative_click(driver: webdriver.Edge, anchor_selector: str, target_selector: str, direction: str) -> None:
-    logger.debug(f"Waiting for anchor element: {{anchor_selector}}")
-    anchor = wait_for_element(driver, anchor_selector, EC.presence_of_element_located)
-    logger.info(f"Clicking element relative to {{anchor_selector}}: {{direction}}")
-    relative_locator = getattr(locate_with(By.CSS_SELECTOR, target_selector), direction)(anchor)
-    relative_element = driver.find_element(relative_locator)
-    relative_element.click()
+    @retry_on_stale
+    def wait_and_select(self, selector: str, text: str) -> None:
+        self.scroll_into_view(selector)
+        dropdown = self.wait_for_element(selector, EC.element_to_be_clickable)
+        select = Select(dropdown)
+        logger.info(f"Selecting option: {{text}}")
+        select.select_by_visible_text(text)
 
-def send_key(key: str) -> str:
-    special_keys = {{
-        'Enter': Keys.ENTER, 'Tab': Keys.TAB, 'Shift': Keys.SHIFT,
-        'Ctrl': Keys.CONTROL, 'Alt': Keys.ALT, 'Esc': Keys.ESCAPE,
-        'Backspace': Keys.BACKSPACE, 'Delete': Keys.DELETE,
-        'PageUp': Keys.PAGE_UP, 'PageDown': Keys.PAGE_DOWN,
-        'Home': Keys.HOME, 'End': Keys.END, 'Insert': Keys.INSERT,
-        **{{f'F{{i}}': getattr(Keys, f'F{{i}}') for i in range(1, 13)}}
-    }}
-    if '+' in key:
-        modifier, letter = key.split('+')
-        return getattr(Keys, modifier.upper()) + letter.lower()
-    return special_keys.get(key, key)
+    def wait_and_relative_click(self, anchor_selector: str, target_selector: str, direction: str) -> None:
+        logger.debug(f"Waiting for anchor element: {{anchor_selector}}")
+        anchor = self.wait_for_element(anchor_selector, EC.presence_of_element_located)
+        logger.info(f"Clicking element relative to {{anchor_selector}}: {{direction}}")
+        relative_locator = getattr(locate_with(By.CSS_SELECTOR, target_selector), direction)(anchor)
+        relative_element = self.driver.find_element(relative_locator)
+        relative_element.click()
 
-def perform_action(driver: webdriver.Edge, action: Dict[str, Any]) -> None:
-    action_type = action["type"]
-    logger.info(f"Performing action: {{action_type}}")
-    try:
-        if action_type == "url":
-            driver.get(action["url"])
-            WebDriverWait(driver, WAIT_TIME).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        elif action_type == "dropdown":
-            wait_and_select(driver, action["selector"], action["text"])
-        elif action_type == "click":
-            wait_and_click(driver, action)
-        elif action_type == "input":
-            wait_and_input(driver, action["selector"], action["text"])
-        elif action_type == "sleep":
-            duration = action["duration"] / 1000
-            logger.info(f"Sleeping for {{duration}} seconds")
-            time.sleep(duration)
-        elif action_type == "keypress":
-            key = send_key(action["key"])
-            logger.info(f"Pressing key: {{action['key']}}")
-            ActionChains(driver).send_keys(key).perform()
-        elif action_type == "relative click":
-            wait_and_relative_click(driver, action["anchor"], action["target"], action["direction"])
-        else:
-            logger.warning(f"Unknown action type: {{action_type}}")
-        time.sleep(0.6)  # Small delay between actions
-    except Exception as e:
-        logger.error(f"Error performing action {{action_type}}: {{e}}")
-        raise
+    def send_key(self, key: str) -> str:
+        special_keys = {{
+            'Enter': Keys.ENTER, 'Tab': Keys.TAB, 'Shift': Keys.SHIFT,
+            'Ctrl': Keys.CONTROL, 'Alt': Keys.ALT, 'Esc': Keys.ESCAPE,
+            'Backspace': Keys.BACKSPACE, 'Delete': Keys.DELETE,
+            'PageUp': Keys.PAGE_UP, 'PageDown': Keys.PAGE_DOWN,
+            'Home': Keys.HOME, 'End': Keys.END, 'Insert': Keys.INSERT,
+            **{{f'F{{i}}': getattr(Keys, f'F{{i}}') for i in range(1, 13)}}
+        }}
+        if '+' in key:
+            modifier, letter = key.split('+')
+            return getattr(Keys, modifier.upper()) + letter.lower()
+        return special_keys.get(key, key)
+
+    def perform_action(self, action: Dict[str, Any]) -> None:
+        action_type = action["type"]
+        logger.info(f"Performing action: {{action_type}}")
+        try:
+            if action_type == "url":
+                self.driver.get(action["url"])
+                WebDriverWait(self.driver, WAIT_TIME).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            elif action_type == "dropdown":
+                self.wait_and_select(action["selector"], action["text"])
+            elif action_type == "click":
+                self.wait_and_click(action)
+            elif action_type == "input":
+                self.wait_and_input(action["selector"], action["text"])
+            elif action_type == "sleep":
+                duration = action["duration"] / 1000
+                logger.info(f"Sleeping for {{duration}} seconds")
+                time.sleep(duration)
+            elif action_type == "keypress":
+                key = self.send_key(action["key"])
+                logger.info(f"Pressing key: {{action['key']}}")
+                ActionChains(self.driver).send_keys(key).perform()
+            elif action_type == "relative click":
+                self.wait_and_relative_click(action["anchor"], action["target"], action["direction"])
+            else:
+                logger.warning(f"Unknown action type: {{action_type}}")
+            time.sleep(0.6)  # Small delay between actions
+        except Exception as e:
+            logger.error(f"Error performing action {{action_type}}: {{e}}")
+            raise
 
 def show_error_popup(error_message):
     root = tk.Tk()
@@ -566,11 +579,12 @@ def show_error_popup(error_message):
     root.destroy()
 
 def main():
-    driver = None
+    automation = None
     try:
-        driver = setup_webdriver()
+        automation = WebAutomation(WEBDRIVER_PATH)
+        actions = {actions_json}
         for action in actions:
-            perform_action(driver, action)
+            automation.perform_action(action)
         logger.info("Script execution completed successfully.")
     except Exception as e:
         logger.error(f"An error occurred: {{e}}")
@@ -578,13 +592,13 @@ def main():
             logger.error(traceback.format_exc())
         show_error_popup(str(e))
     finally:
-        if driver:
+        if automation and automation.driver:
             print("Press 'F10' to close the browser...")
             while True:
                 if keyboard.is_pressed('F10'):
                     break
                 time.sleep(0.2)
-            driver.quit()
+            automation.driver.quit()
         logger.info(f"Log file saved as {{LOG_FILE}}")
 
 if __name__ == "__main__":
