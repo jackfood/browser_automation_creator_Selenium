@@ -12,7 +12,7 @@ import json
 import os
 
 # User Configuration Section
-SELENIUM_DRIVER_PATH = r'C:\Users\Desktop\msedgedriver.exe'  # Update your Selenium Driver
+SELENIUM_DRIVER_PATH = 'C:\\Users\\Desktop\\msedgedriver.exe'  # Update your Selenium Driver
 DEFAULT_URL = "https://www.google.com" # Your Default opening URL for detection
 OUTPUT_FILE_NAME = "web_automation_script.py" # Your name of the script (default save location is in desktop)
 
