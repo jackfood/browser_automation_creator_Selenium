@@ -5,13 +5,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.options import Options
 from selenium.common.exceptions import WebDriverException, NoSuchWindowException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.relative_locator import locate_with
 import pyperclip
 from urllib.parse import urlparse
 import keyboard
 import json
 import os
-
-#Fix unicode escape in the template
 
 # User Configuration Section
 SELENIUM_DRIVER_PATH = r'C:\Users\Desktop\msedgedriver.exe'  # Update this path
@@ -68,37 +68,55 @@ class CombinedAutomationApp:
     def create_action_frame(self):
         self.action_frame = tk.Frame(self.master)
         self.action_frame.pack(pady=10, padx=10, fill=tk.X)
-
-        self.action_types = ["Click", "Dropdown", "Input", "URL", "Sleep", "Keypress"]
+    
+        self.action_types = ["Click", "Dropdown", "Input", "URL", "Sleep", "Keypress", "Relative Click"]
         self.special_keys = ["", "Enter", "Tab", "Shift", "Ctrl", "Alt", "Esc", "Backspace", "Delete", "PageUp", "PageDown", "Home", "End", "Insert", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
-
+        self.relative_directions = ["above", "below", "toLeftOf", "toRightOf", "near"]
+    
         ttk.Label(self.action_frame, text="Action Type:").grid(row=0, column=0, padx=5, pady=5)
         self.action_type = ttk.Combobox(self.action_frame, values=self.action_types)
         self.action_type.grid(row=0, column=1, padx=5, pady=5)
         self.action_type.set(self.action_types[0])
         self.action_type.bind("<<ComboboxSelected>>", self.on_action_type_change)
-
+    
         self.selector_label = ttk.Label(self.action_frame, text="Selector:")
         self.selector_label.grid(row=1, column=0, padx=5, pady=5)
         self.selector = ttk.Entry(self.action_frame, width=50)
         self.selector.grid(row=1, column=1, padx=5, pady=5)
-
+    
         self.text_label = ttk.Label(self.action_frame, text="Text:")
         self.text_label.grid(row=2, column=0, padx=5, pady=5)
         self.text = ttk.Entry(self.action_frame, width=50)
         self.text.grid(row=2, column=1, padx=5, pady=5)
-
+    
         self.special_key_label = ttk.Label(self.action_frame, text="Special Key:")
         self.special_key_label.grid(row=3, column=0, padx=5, pady=5)
         self.special_key = ttk.Combobox(self.action_frame, values=self.special_keys)
         self.special_key.grid(row=3, column=1, padx=5, pady=5)
         self.special_key.bind("<<ComboboxSelected>>", self.on_special_key_change)
-
+    
         self.special_key_input = ttk.Entry(self.action_frame, width=5, state='disabled')
         self.special_key_input.grid(row=3, column=2, padx=5, pady=5)
-
+    
+        # New fields for Relative Click
+        self.target_label = ttk.Label(self.action_frame, text="Target Selector:")
+        self.target_label.grid(row=4, column=0, padx=5, pady=5)
+        self.target = ttk.Entry(self.action_frame, width=50)
+        self.target.grid(row=4, column=1, padx=5, pady=5)
+    
+        self.direction_label = ttk.Label(self.action_frame, text="Relative Direction:")
+        self.direction_label.grid(row=5, column=0, padx=5, pady=5)
+        self.direction = ttk.Combobox(self.action_frame, values=self.relative_directions)
+        self.direction.grid(row=5, column=1, padx=5, pady=5)
+    
+        # Initially hide the new fields
+        self.target_label.grid_remove()
+        self.target.grid_remove()
+        self.direction_label.grid_remove()
+        self.direction.grid_remove()
+    
         self.add_button = ttk.Button(self.action_frame, text="Add", command=self.add_action)
-        self.add_button.grid(row=4, column=0, columnspan=2, pady=10)
+        self.add_button.grid(row=6, column=0, columnspan=2, pady=10)
 
     def create_action_list(self):
         self.action_list = tk.Listbox(self.master, width=70, height=10, selectmode=tk.SINGLE)
@@ -213,15 +231,23 @@ class CombinedAutomationApp:
 
     def on_action_type_change(self, event):
         action_type = self.action_type.get()
-        self.selector_label.grid(row=1, column=0, padx=5, pady=5)
-        self.selector.grid(row=1, column=1, padx=5, pady=5)
-        self.text_label.grid(row=2, column=0, padx=5, pady=5)
-        self.text.grid(row=2, column=1, padx=5, pady=5)
+        
+        # Reset all fields and labels
+        self.selector_label.config(text="Selector:")
+        self.text_label.config(text="Text:")
+        self.selector_label.grid()
+        self.selector.grid()
+        self.text_label.grid()
+        self.text.grid()
         self.special_key_label.grid_remove()
         self.special_key.grid_remove()
         self.special_key_input.grid_remove()
+        self.target_label.grid_remove()
+        self.target.grid_remove()
+        self.direction_label.grid_remove()
+        self.direction.grid_remove()
         self.text.config(state='normal')
-
+    
         if action_type == "URL":
             self.selector_label.grid_remove()
             self.selector.grid_remove()
@@ -238,12 +264,28 @@ class CombinedAutomationApp:
         elif action_type == "Keypress":
             self.selector_label.grid_remove()
             self.selector.grid_remove()
-            self.text_label.config(text="Key:")
-            self.special_key_label.grid(row=3, column=0, padx=5, pady=5)
-            self.special_key.grid(row=3, column=1, padx=5, pady=5)
+            self.text_label.grid_remove()
+            self.text.grid_remove()
+            self.special_key_label.grid()
+            self.special_key.grid()
             self.special_key.set("")
-        else:
-            self.text_label.config(text="Text:")
+        elif action_type == "Relative Click":
+            self.selector_label.config(text="Anchor Selector (CSS):")
+            self.text_label.grid_remove()
+            self.text.grid_remove()
+            self.target_label.grid()
+            self.target.grid()
+            self.direction_label.grid()
+            self.direction.grid()
+            self.direction.set("")  # Reset direction dropdown
+        
+        # Clear all input fields
+        self.selector.delete(0, tk.END)
+        self.text.delete(0, tk.END)
+        self.special_key.set("")
+        self.special_key_input.delete(0, tk.END)
+        self.target.delete(0, tk.END)
+        self.direction.set("")
 
     def on_special_key_change(self, event):
         special_key = self.special_key.get()
@@ -264,7 +306,9 @@ class CombinedAutomationApp:
         text = self.text.get()
         special_key = self.special_key.get()
         special_key_input = self.special_key_input.get()
-
+        target = self.target.get()
+        direction = self.direction.get()
+    
         if action_type == "url":
             action = {"type": action_type, "url": text}
             display_text = f"URL: {text}"
@@ -274,19 +318,38 @@ class CombinedAutomationApp:
         elif action_type == "dropdown":
             action = {"type": action_type, "selector": selector, "text": text}
             display_text = f"Dropdown: {selector} (Reference: {text})"
+        elif action_type == "input":
+            action = {"type": action_type, "selector": selector, "text": text}
+            display_text = f"Input: {selector} (Text: {text})"
         elif action_type == "sleep":
-            action = {"type": action_type, "duration": int(text)}
-            display_text = f"Sleep: {text} ms"
+            try:
+                duration = int(text)
+                action = {"type": action_type, "duration": duration}
+                display_text = f"Sleep: {duration} ms"
+            except ValueError:
+                messagebox.showwarning("Invalid Input", "Please enter a valid integer for sleep duration.")
+                return
         elif action_type == "keypress":
             key = special_key if special_key else text
             if special_key in ["Shift", "Ctrl"] and special_key_input:
                 key = f"{special_key}+{special_key_input}"
             action = {"type": action_type, "key": key}
             display_text = f"Keypress: {key}"
+        elif action_type == "relative click":
+            if not all([selector, target, direction]):
+                messagebox.showwarning("Missing Information", "Please fill in all fields for Relative Click.")
+                return
+            action = {
+                "type": action_type,
+                "anchor": selector,
+                "target": target,
+                "direction": direction
+            }
+            display_text = f"Relative Click: Anchor {selector}, Target {target}, Direction: {direction}"
         else:
-            action = {"type": action_type, "selector": selector, "text": text}
-            display_text = f"{action_type.capitalize()}: {selector} {text}"
-        
+            messagebox.showwarning("Invalid Action", f"Unknown action type: {action_type}")
+            return
+    
         insert_position = self.insert_position.get()
         if insert_position:
             try:
@@ -345,6 +408,7 @@ from selenium.webdriver.edge.service import Service
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.edge.options import Options
 from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
+from selenium.webdriver.support.relative_locator import locate_with
 
 # Configuration
 WEBDRIVER_PATH = r'{0}'  # Update this path if needed
@@ -427,6 +491,14 @@ def wait_and_select(selector, text):
     logger.info(f"Selecting option: {{text}}")
     select.select_by_visible_text(text)
 
+def wait_and_relative_click(anchor_selector, target_selector, direction):
+    logger.debug(f"Waiting for anchor element: {{anchor_selector}}")
+    anchor = wait_for_element(anchor_selector, EC.presence_of_element_located)
+    logger.info(f"Clicking element relative to {{anchor_selector}}: {{direction}}")
+    relative_locator = getattr(locate_with(By.CSS_SELECTOR, target_selector), direction)(anchor)
+    relative_element = driver.find_element(relative_locator)
+    relative_element.click()
+
 def send_key(key):
     special_keys = {{
         'Enter': Keys.ENTER, 'Tab': Keys.TAB, 'Shift': Keys.SHIFT,
@@ -461,6 +533,8 @@ def perform_action(action):
         key = send_key(action["key"])
         logger.info(f"Pressing key: {{action['key']}}")
         ActionChains(driver).send_keys(key).perform()
+    elif action_type == "relative click":
+        wait_and_relative_click(action["anchor"], action["target"], action["direction"])
     time.sleep(0.6)  # Small delay between actions
 
 def main():
@@ -483,6 +557,7 @@ def main():
 if __name__ == "__main__":
     main()
 """
+
         return code.format(SELENIUM_DRIVER_PATH, actions_json)
 
     def on_closing(self):
