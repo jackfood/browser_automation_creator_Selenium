@@ -1,6 +1,3 @@
-Here's a README.md file to describe the code for GitHub:
-
-```markdown
 # Web Automation Tool
 
 This project is a Python-based web automation tool with a graphical user interface (GUI). It allows users to create, manage, and execute web automation scripts without writing code.
