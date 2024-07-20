@@ -57,6 +57,8 @@ This project is a Python-based web automation tool with a graphical user interfa
 
 8. The generated script will be saved on your Desktop as "web_automation_script.txt".
 
+9. Copy the script and run it in python.
+
 ## Action Types
 
 - **Click**: Click on an element
@@ -71,14 +73,3 @@ This project is a Python-based web automation tool with a graphical user interfa
 - The tool uses Microsoft Edge in InPrivate mode for automation.
 - Generated scripts include error handling and logging for better debugging.
 - Press F10 to close the browser when running the generated script.
-
-## Contributing
-
-Contributions, issues, and feature requests are welcome. Feel free to check [issues page](https://github.com/yourusername/web-automation-tool/issues) if you want to contribute.
-
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)
-```
-
-This README provides an overview of the project, its features, installation instructions, usage guide, and other relevant information. You may want to customize it further based on your specific project details, such as adding your GitHub username, adjusting the license if needed, or adding more specific instructions or examples.
