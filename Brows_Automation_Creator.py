@@ -11,43 +11,64 @@ import keyboard
 import json
 import os
 
+# User Configuration Section
+SELENIUM_DRIVER_PATH = r'C:\Users\Desktop\msedgedriver.exe'  # Update your Selenium Driver
+DEFAULT_URL = "https://www.google.com" # Your Default opening URL for detection
+OUTPUT_FILE_NAME = "web_automation_script.py" # Your name of the script (default save location is in desktop)
+
 class CombinedAutomationApp:
     def __init__(self, master):
         self.master = master
         master.title("Web Automation Tool")
         master.geometry("800x600")
 
-        self.url_frame = tk.Frame(master)
+        self.setup_ui()
+        
+        self.driver = None
+        self.is_detecting = False
+        self.current_selector = ""
+        self.actions = []
+
+    def setup_ui(self):
+        self.create_url_frame()
+        self.create_start_button()
+        self.create_selector_frame()
+        self.create_action_frame()
+        self.create_action_list()
+        self.create_control_buttons()
+
+    def create_url_frame(self):
+        self.url_frame = tk.Frame(self.master)
         self.url_frame.pack(pady=10, padx=10, fill=tk.X)
 
-        self.url_label = tk.Label(self.url_frame, text="URL:")
-        self.url_label.pack(side=tk.LEFT)
+        tk.Label(self.url_frame, text="URL:").pack(side=tk.LEFT)
 
         self.url_entry = tk.Entry(self.url_frame, width=50)
         self.url_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 0))
-        self.url_entry.insert(0, "https://www.google.com")
+        self.url_entry.insert(0, DEFAULT_URL)
 
-        self.start_button = tk.Button(master, text="Start Detection", command=self.start_detection)
+    def create_start_button(self):
+        self.start_button = tk.Button(self.master, text="Start Detection", command=self.start_detection)
         self.start_button.pack(pady=10)
 
-        self.selector_frame = tk.Frame(master, bd=2)
+    def create_selector_frame(self):
+        self.selector_frame = tk.Frame(self.master, bd=2)
         self.selector_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        self.selector_label = tk.Label(self.selector_frame, text="Current CSS Selector:", anchor='w')
-        self.selector_label.pack(side=tk.LEFT, padx=5)
+        tk.Label(self.selector_frame, text="Current CSS Selector:", anchor='w').pack(side=tk.LEFT, padx=5)
 
         self.selector_display = tk.Label(self.selector_frame, width=50, anchor='w', bg='Black', fg='white')
         self.selector_display.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
 
-        self.copy_status_label = tk.Label(master, text="", fg="green")
+        self.copy_status_label = tk.Label(self.master, text="", fg="green")
         self.copy_status_label.pack(pady=5)
 
-        self.actions = []
+    def create_action_frame(self):
+        self.action_frame = tk.Frame(self.master)
+        self.action_frame.pack(pady=10, padx=10, fill=tk.X)
+
         self.action_types = ["Click", "Dropdown", "Input", "URL", "Sleep", "Keypress"]
         self.special_keys = ["", "Enter", "Tab", "Shift", "Ctrl", "Alt", "Esc", "Backspace", "Delete", "PageUp", "PageDown", "Home", "End", "Insert", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
-
-        self.action_frame = tk.Frame(master)
-        self.action_frame.pack(pady=10, padx=10, fill=tk.X)
 
         ttk.Label(self.action_frame, text="Action Type:").grid(row=0, column=0, padx=5, pady=5)
         self.action_type = ttk.Combobox(self.action_frame, values=self.action_types)
@@ -77,25 +98,20 @@ class CombinedAutomationApp:
         self.add_button = ttk.Button(self.action_frame, text="Add", command=self.add_action)
         self.add_button.grid(row=4, column=0, columnspan=2, pady=10)
 
-        self.action_list = tk.Listbox(master, width=70, height=10, selectmode=tk.SINGLE)
+    def create_action_list(self):
+        self.action_list = tk.Listbox(self.master, width=70, height=10, selectmode=tk.SINGLE)
         self.action_list.pack(padx=5, pady=5)
 
-        self.remove_button = ttk.Button(master, text="Remove", command=self.remove_action)
+    def create_control_buttons(self):
+        self.remove_button = ttk.Button(self.master, text="Remove", command=self.remove_action)
         self.remove_button.pack(pady=10)
 
-        self.insert_position_label = ttk.Label(master, text="Insert Position:")
-        self.insert_position_label.pack()
-        self.insert_position = ttk.Entry(master, width=10)
+        ttk.Label(self.master, text="Insert Position:").pack()
+        self.insert_position = ttk.Entry(self.master, width=10)
         self.insert_position.pack()
 
-        self.complete_button = ttk.Button(master, text="Complete", command=self.complete)
+        self.complete_button = ttk.Button(self.master, text="Complete", command=self.complete)
         self.complete_button.pack(pady=10)
-
-        self.driver = None
-        self.is_detecting = False
-        self.current_selector = ""
-
-        self.on_action_type_change(None)
 
     def start_detection(self):
         if self.is_detecting:
@@ -112,7 +128,7 @@ class CombinedAutomationApp:
                 options = Options()
                 options.add_argument("inprivate")
                 options.add_argument("--log-level=3")
-                service = Service(r'C:\Users\Desktop\msedgedriver.exe')
+                service = Service(SELENIUM_DRIVER_PATH)
                 self.driver = webdriver.Edge(service=service, options=options)
                 self.driver.get(url)
                 self.is_detecting = True
@@ -282,6 +298,9 @@ class CombinedAutomationApp:
             self.actions.append(action)
             self.action_list.insert(tk.END, display_text)
         
+        self.clear_input_fields()
+
+    def clear_input_fields(self):
         self.selector.delete(0, tk.END)
         self.text.delete(0, tk.END)
         self.special_key.set("")
@@ -302,7 +321,7 @@ class CombinedAutomationApp:
             return
         
         code = self.generate_code()
-        file_path = os.path.join(os.path.expanduser("~"), "Desktop", "web_automation_script.txt")
+        file_path = os.path.join(os.path.expanduser("~"), "Desktop", OUTPUT_FILE_NAME)
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(code)
         
@@ -311,6 +330,10 @@ class CombinedAutomationApp:
     def generate_code(self):
         actions_json = json.dumps(self.actions, indent=4)
         code = """
+import logging
+import time
+import traceback
+import keyboard
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
@@ -320,13 +343,9 @@ from selenium.webdriver.edge.service import Service
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.edge.options import Options
 from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
-import time
-import traceback
-import keyboard
-import logging
 
 # Configuration
-WEBDRIVER_PATH = 'C:\\Peter\\msedgedriver.exe'
+WEBDRIVER_PATH = '{0}'  # Update this path if needed
 WAIT_TIME = 1
 RETRY_ATTEMPTS = 5
 DEBUG = True
@@ -347,7 +366,7 @@ driver = webdriver.Edge(service=service, options=edge_options)
 driver.execute_script("Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}})")
 
 # Action definitions
-actions = {0}
+actions = {1}
 
 def wait_for_element(selector, condition):
     logger.debug(f"Waiting for element: {{selector}}")
@@ -462,7 +481,7 @@ def main():
 if __name__ == "__main__":
     main()
 """
-        return code.format(actions_json)
+        return code.format(SELENIUM_DRIVER_PATH, actions_json)
 
     def on_closing(self):
         self.stop_detection()
