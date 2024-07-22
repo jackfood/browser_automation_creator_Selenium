@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.edge.service import Service
@@ -17,24 +17,28 @@ import logging
 
 # User Configuration Section
 SELENIUM_DRIVER_PATH = r'C:\Peter\msedgedriver.exe'  # Update this path
-DEFAULT_URL = "www.google.com"
-OUTPUT_FILE_NAME = "web_automation_script.txt"
+DEFAULT_URL = "https:/www.google.com"
+OUTPUT_FILE_NAME = "web_automation_script.py"
 
 class CombinedAutomationApp:
     def __init__(self, master):
         self.master = master
         master.title("Web Automation Tool")
-        master.geometry("800x600")
+        master.geometry("800x700")
 
+        self.selenium_driver_path = SELENIUM_DRIVER_PATH  # Add this line
+        
         self.setup_ui()
         
         self.driver = None
         self.is_detecting = False
         self.current_selector = ""
+        self.current_alternate_selector = ""
         self.actions = []
 
     def setup_ui(self):
         self.create_url_frame()
+        self.create_webdriver_frame()  # New frame for webdriver path
         self.create_start_button()
         self.create_selector_frame()
         self.create_action_frame()
@@ -51,6 +55,37 @@ class CombinedAutomationApp:
         self.url_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 0))
         self.url_entry.insert(0, DEFAULT_URL)
 
+    def update_copy_target(self):
+        # This method will be called when either checkbox is clicked
+        # It ensures that only one checkbox is checked at a time
+        if self.selector_check.instate(['selected']):
+            self.alternate_selector_check.state(['!alternate'])
+        elif self.alternate_selector_check.instate(['selected']):
+            self.selector_check.state(['!alternate'])
+
+    def create_webdriver_frame(self):
+        self.webdriver_frame = tk.Frame(self.master)
+        self.webdriver_frame.pack(pady=5, padx=10, fill=tk.X)
+
+        tk.Label(self.webdriver_frame, text="WebDriver Path:").pack(side=tk.LEFT)
+
+        self.webdriver_entry = tk.Entry(self.webdriver_frame, width=50)
+        self.webdriver_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 5))
+        self.webdriver_entry.insert(0, self.selenium_driver_path)
+
+        self.browse_button = tk.Button(self.webdriver_frame, text="Browse", command=self.browse_webdriver)
+        self.browse_button.pack(side=tk.RIGHT)
+
+    def browse_webdriver(self):
+        filename = filedialog.askopenfilename(
+            title="Select WebDriver",
+            filetypes=(("Executable files", "*.exe"), ("All files", "*.*"))
+        )
+        if filename:
+            self.webdriver_entry.delete(0, tk.END)
+            self.webdriver_entry.insert(0, filename)
+            self.selenium_driver_path = filename
+
     def create_start_button(self):
         self.start_button = tk.Button(self.master, text="Start Detection", command=self.start_detection)
         self.start_button.pack(pady=10)
@@ -59,11 +94,33 @@ class CombinedAutomationApp:
         self.selector_frame = tk.Frame(self.master, bd=2)
         self.selector_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        tk.Label(self.selector_frame, text="Current CSS Selector:", anchor='w').pack(side=tk.LEFT, padx=5)
+        # Primary Selector Row
+        primary_frame = tk.Frame(self.selector_frame)
+        primary_frame.pack(fill=tk.X, expand=True)
 
-        self.selector_display = tk.Label(self.selector_frame, width=50, anchor='w', bg='Black', fg='white')
+        tk.Label(primary_frame, text="Current CSS Selector:", anchor='w').pack(side=tk.LEFT, padx=5)
+
+        self.selector_display = tk.Entry(primary_frame, width=50, bg='black', fg='white')
         self.selector_display.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
 
+        self.selector_check = ttk.Checkbutton(primary_frame, command=self.update_copy_target)
+        self.selector_check.pack(side=tk.LEFT, padx=5)
+        self.selector_check.state(['!alternate'])  # Unchecked by default
+
+        # Alternate Selector Row
+        alternate_frame = tk.Frame(self.selector_frame)
+        alternate_frame.pack(fill=tk.X, expand=True, pady=(5, 0))
+
+        tk.Label(alternate_frame, text="Alternate Selector:", anchor='w').pack(side=tk.LEFT, padx=5)
+
+        self.alternate_selector_display = tk.Entry(alternate_frame, width=50, bg='black', fg='white')
+        self.alternate_selector_display.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+
+        self.alternate_selector_check = ttk.Checkbutton(alternate_frame, command=self.update_copy_target)
+        self.alternate_selector_check.pack(side=tk.LEFT, padx=5)
+        self.alternate_selector_check.state(['!alternate'])  # Unchecked by default
+
+        # Copy Status Label
         self.copy_status_label = tk.Label(self.master, text="", fg="green")
         self.copy_status_label.pack(pady=5)
 
@@ -150,7 +207,7 @@ class CombinedAutomationApp:
                 options = Options()
                 options.add_argument("inprivate")
                 options.add_argument("--log-level=3")
-                service = Service(SELENIUM_DRIVER_PATH)
+                service = Service(self.selenium_driver_path)
                 self.driver = webdriver.Edge(service=service, options=options)
                 self.driver.get(url)
                 self.is_detecting = True
@@ -158,12 +215,21 @@ class CombinedAutomationApp:
                 self.inject_mouse_move_script()
                 self.detect_css()
                 keyboard.on_press_key('shift', self.copy_to_clipboard)
+                
+                # Automatically add URL action
+                self.add_url_action(url)
             else:
                 tk.messagebox.showerror("Invalid URL", "Please enter a valid URL.")
         except WebDriverException as e:
-            tk.messagebox.showerror("WebDriver Error", f"Error initializing WebDriver: {str(e)}")
+            tk.messagebox.showerror("WebDriver Error", f"Error initializing WebDriver: {str(e)}\n\nPlease check the WebDriver path and try again.")
         except Exception as e:
             tk.messagebox.showerror("Error", f"An error occurred: {str(e)}")
+
+
+    def add_url_action(self, url):
+        action = {"type": "url", "url": url}
+        self.actions.append(action)
+        self.action_list.insert(tk.END, f"URL: {url}")
 
     def stop_detection(self):
         self.is_detecting = False
@@ -185,19 +251,52 @@ class CombinedAutomationApp:
             var element = document.elementFromPoint(e.clientX, e.clientY);
             if (element !== window.lastElement) {
                 window.lastElement = element;
-                var selector = '';
-                if (element.id) {
-                    selector = element.tagName.toLowerCase() + '#' + element.id;
-                } else if (element.className) {
-                    selector = element.tagName.toLowerCase() + '.' + element.className.replace(/\s+/g, '.');
-                } else {
-                    selector = element.tagName.toLowerCase();
-                }
+                var selector = getFullSelector(element);
+                var alternateSelector = getAlternateSelector(element);
                 window.currentSelector = selector;
+                window.currentAlternateSelector = alternateSelector;
             }
         });
+
+        function getFullSelector(element) {
+            if (!(element instanceof Element)) return '';
+            var path = [];
+            while (element.nodeType === Node.ELEMENT_NODE) {
+                var selector = element.nodeName.toLowerCase();
+                if (element.id) {
+                    selector += '#' + element.id;
+                    path.unshift(selector);
+                    break;
+                } else {
+                    var sibling = element;
+                    var nth = 1;
+                    while (sibling.previousElementSibling) {
+                        sibling = sibling.previousElementSibling;
+                        if (sibling.nodeName.toLowerCase() === selector)
+                            nth++;
+                    }
+                    if (nth !== 1)
+                        selector += ":nth-of-type("+nth+")";
+                }
+                path.unshift(selector);
+                element = element.parentNode;
+            }
+            return path.join(' > ');
+        }
+
+        function getAlternateSelector(element) {
+            if (!(element instanceof Element)) return '';
+            if (element.id) return '#' + element.id;
+            if (element.name) return element.tagName.toLowerCase() + '[name="' + element.name + '"]';
+            
+            var classes = Array.from(element.classList).join('.');
+            if (classes) return element.tagName.toLowerCase() + '.' + classes;
+            
+            return getFullSelector(element);  // fallback to full selector
+        }
         """
         self.driver.execute_script(script)
+
 
     def detect_css(self):
         if not self.is_detecting:
@@ -211,9 +310,17 @@ class CombinedAutomationApp:
                 self.inject_mouse_move_script()
 
             selector = self.driver.execute_script("return window.currentSelector || '';")
+            alternate_selector = self.driver.execute_script("return window.currentAlternateSelector || '';")
+            
             if selector:
-                self.selector_display.config(text=selector)
+                self.selector_display.delete(0, tk.END)
+                self.selector_display.insert(0, selector)
                 self.current_selector = selector
+
+            if alternate_selector:
+                self.alternate_selector_display.delete(0, tk.END)
+                self.alternate_selector_display.insert(0, alternate_selector)
+                self.current_alternate_selector = alternate_selector
 
         except NoSuchWindowException:
             self.stop_detection()
@@ -224,12 +331,20 @@ class CombinedAutomationApp:
             self.master.after(100, self.detect_css)
 
     def copy_to_clipboard(self, e):
-        if self.current_selector:
+        if self.selector_check.instate(['selected']):
             pyperclip.copy(self.current_selector)
             self.selector.delete(0, tk.END)
             self.selector.insert(0, self.current_selector)
-            self.copy_status_label.config(text="CSS selector copied to clipboard!")
-            self.master.after(2000, lambda: self.copy_status_label.config(text=""))
+            self.copy_status_label.config(text="Primary CSS selector copied to clipboard!")
+        elif self.alternate_selector_check.instate(['selected']):
+            pyperclip.copy(self.current_alternate_selector)
+            self.selector.delete(0, tk.END)
+            self.selector.insert(0, self.current_alternate_selector)
+            self.copy_status_label.config(text="Alternate selector copied to clipboard!")
+        else:
+            self.copy_status_label.config(text="Please select a selector to copy!")
+
+        self.master.after(2000, lambda: self.copy_status_label.config(text=""))
 
     def on_action_type_change(self, event):
         action_type = self.action_type.get()
@@ -627,13 +742,6 @@ if __name__ == "__main__":
     def on_closing(self):
         self.stop_detection()
         self.master.destroy()
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = CombinedAutomationApp(root)
-    root.protocol("WM_DELETE_WINDOW", app.on_closing)
-    root.mainloop()
-
 
 if __name__ == "__main__":
     root = tk.Tk()
