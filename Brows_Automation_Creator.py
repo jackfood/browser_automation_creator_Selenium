@@ -16,8 +16,8 @@ import os
 import logging
 
 # User Configuration Section
-SELENIUM_DRIVER_PATH = r'C:\Users\Peter-Susan\Desktop\msedgedriver.exe'  # Update this path
-DEFAULT_URL = "https://www.google.com"
+SELENIUM_DRIVER_PATH = r'C:\Peter\msedgedriver.exe'  # Update this path
+DEFAULT_URL = "https://eup.singhealth.com.sg:8443/eu-portal/landing.action"
 OUTPUT_FILE_NAME = "web_automation_script.txt"
 
 class CombinedAutomationApp:
@@ -72,7 +72,7 @@ class CombinedAutomationApp:
         self.action_frame.pack(pady=10, padx=10, fill=tk.X)
     
         self.action_types = ["Click", "Dropdown", "Input", "URL", "Sleep", "Keypress", "Relative Click"]
-        self.special_keys = ["", "Enter", "Tab", "Shift", "Ctrl", "Alt", "Esc", "Backspace", "Delete", "PageUp", "PageDown", "Home", "End", "Insert", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
+        self.special_keys = ["", "Enter", "Tab", "Shift", "Ctrl", "Alt", "Esc", "Backspace", "Delete", "PageUp", "PageDown", "Home", "End", "Insert", "Up", "Down", "Left", "Right", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
         self.relative_directions = ["above", "below", "toLeftOf", "toRightOf", "near"]
     
         ttk.Label(self.action_frame, text="Action Type:").grid(row=0, column=0, padx=5, pady=5)
@@ -418,13 +418,13 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.edge.service import Service
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.edge.options import Options
-from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, WebDriverException
+from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, WebDriverException, NoSuchElementException
 from selenium.webdriver.support.relative_locator import locate_with
 from typing import Callable, Dict, Any
 
 # Configuration
 SCRIPT_ID = "{script_id}"
-WEBDRIVER_PATH = r"C:\\Users\\Peter-Susan\\Desktop\\msedgedriver.exe"
+WEBDRIVER_PATH = r"C:\\Peter\\msedgedriver.exe"
 WAIT_TIME = 5
 RETRY_ATTEMPTS = 3
 DEBUG = True
@@ -477,7 +477,7 @@ class WebAutomation:
                     return func(*args, **kwargs)
                 except StaleElementReferenceException:
                     logger.warning(f"Stale element reference exception. Retrying (attempt {{attempt + 1}}/{{RETRY_ATTEMPTS}})")
-                    time.sleep(1)  # Add a small delay before retrying
+                    time.sleep(0.2)  # Add a small delay before retrying
                     if attempt == RETRY_ATTEMPTS - 1:
                         raise
         return wrapper
@@ -512,9 +512,18 @@ class WebAutomation:
     def wait_and_select(self, selector: str, text: str) -> None:
         self.scroll_into_view(selector)
         dropdown = self.wait_for_element(selector, EC.element_to_be_clickable)
-        select = Select(dropdown)
-        logger.info(f"Selecting option: {{text}}")
-        select.select_by_visible_text(text)
+        
+        try:
+            select = Select(dropdown)
+            logger.info(f"Selecting option: {{text}}")
+            select.select_by_visible_text(text)
+        except WebDriverException:
+            # If it's not a <select> element, try to handle it as a custom dropdown
+            logger.info(f"Handling as custom dropdown: {{selector}}")
+            dropdown.click()
+            time.sleep(0.3)  # Wait for dropdown to expand
+            option = self.driver.find_element(By.XPATH, f"//*[contains(text(), '{{text}}')]")
+            option.click()
 
     def wait_and_relative_click(self, anchor_selector: str, target_selector: str, direction: str) -> None:
         logger.debug(f"Waiting for anchor element: {{anchor_selector}}")
@@ -530,6 +539,8 @@ class WebAutomation:
             'Ctrl': Keys.CONTROL, 'Alt': Keys.ALT, 'Esc': Keys.ESCAPE,
             'Backspace': Keys.BACKSPACE, 'Delete': Keys.DELETE,
             'PageUp': Keys.PAGE_UP, 'PageDown': Keys.PAGE_DOWN,
+            'Up': Keys.ARROW_UP, 'Down': Keys.ARROW_DOWN,
+            'Left': Keys.ARROW_LEFT, 'Right': Keys.ARROW_RIGHT,
             'Home': Keys.HOME, 'End': Keys.END, 'Insert': Keys.INSERT,
             **{{f'F{{i}}': getattr(Keys, f'F{{i}}') for i in range(1, 13)}}
         }}
@@ -539,35 +550,36 @@ class WebAutomation:
         return special_keys.get(key, key)
 
     def perform_action(self, action: Dict[str, Any]) -> None:
-        action_type = action["type"]
-        logger.info(f"Performing action: {{action_type}}")
-        try:
-            if action_type == "url":
-                self.driver.get(action["url"])
-                WebDriverWait(self.driver, WAIT_TIME).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-            elif action_type == "dropdown":
-                self.wait_and_select(action["selector"], action["text"])
-            elif action_type == "click":
-                self.wait_and_click(action)
-            elif action_type == "input":
-                self.wait_and_input(action["selector"], action["text"])
-            elif action_type == "sleep":
-                duration = action["duration"] / 1000
-                logger.info(f"Sleeping for {{duration}} seconds")
-                time.sleep(duration)
-            elif action_type == "keypress":
-                key = self.send_key(action["key"])
-                logger.info(f"Pressing key: {{action['key']}}")
-                ActionChains(self.driver).send_keys(key).perform()
-            elif action_type == "relative click":
-                self.wait_and_relative_click(action["anchor"], action["target"], action["direction"])
-            else:
-                logger.warning(f"Unknown action type: {{action_type}}")
-            time.sleep(0.6)  # Small delay between actions
-        except Exception as e:
-            logger.error(f"Error performing action {{action_type}}: {{e}}")
-            raise
-
+            action_type = action["type"]
+            logger.info(f"Performing action: {{action_type}}")
+            try:
+                if action_type == "url":
+                    self.driver.get(action["url"])
+                    WebDriverWait(self.driver, WAIT_TIME).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+                elif action_type == "dropdown":
+                    self.wait_and_select(action["selector"], action["text"])
+                elif action_type == "click":
+                    self.wait_and_click(action)
+                elif action_type == "input":
+                    self.wait_and_input(action["selector"], action["text"])
+                elif action_type == "sleep":
+                    duration = action["duration"] / 1000
+                    logger.info(f"Sleeping for {{duration}} seconds")
+                    time.sleep(duration)
+                elif action_type == "keypress":
+                    key = self.send_key(action["key"])
+                    logger.info(f"Pressing key: {{action['key']}}")
+                    active_element = self.driver.switch_to.active_element
+                    active_element.send_keys(key)
+                elif action_type == "relative click":
+                    self.wait_and_relative_click(action["anchor"], action["target"], action["direction"])
+                else:
+                    logger.warning(f"Unknown action type: {{action_type}}")
+                time.sleep(0.1)  # Small delay between actions
+            except Exception as e:
+                logger.error(f"Error performing action {{action_type}}: {{e}}")
+                raise
+    
 def show_error_popup(error_message):
     root = tk.Tk()
     root.withdraw()  # Hide the main window
@@ -582,7 +594,9 @@ def main():
     automation = None
     try:
         automation = WebAutomation(WEBDRIVER_PATH)
+
         actions = {actions_json}
+
         for action in actions:
             automation.perform_action(action)
         logger.info("Script execution completed successfully.")
@@ -603,7 +617,8 @@ def main():
 
 if __name__ == "__main__":
     main()
-"""
+
+    """
             return code
         except Exception as e:
             messagebox.showerror("Error Generating Code", f"An error occurred while generating the code:\n\n{str(e)}")
@@ -612,6 +627,13 @@ if __name__ == "__main__":
     def on_closing(self):
         self.stop_detection()
         self.master.destroy()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = CombinedAutomationApp(root)
+    root.protocol("WM_DELETE_WINDOW", app.on_closing)
+    root.mainloop()
+
 
 if __name__ == "__main__":
     root = tk.Tk()
