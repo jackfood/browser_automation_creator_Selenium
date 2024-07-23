@@ -43,13 +43,13 @@ This project is a Python-based web automation tool with a graphical user interfa
    python web_automation_tool.py
    ```
 
-2. Enter the URL of the website you want to automate in the URL field.
+2. Enter the URL of the website you want to automate in the URL field. (Auto Entry to the first step of automation)
 
 3. Click "Start Detection" to open the browser and start detecting CSS selectors.
 
 4. Hover over elements on the webpage to see their CSS selectors.
 
-5. Press Shift to copy the current selector to the clipboard.
+5. Press 'Ctrl' Key to copy the current selector to the clipboard.
 
 6. Use the GUI to add actions (Click, Input, Dropdown, etc.) to your automation script.
 
