@@ -17,18 +17,20 @@ import logging
 
 # User Configuration Section
 SELENIUM_DRIVER_PATH = r'C:\Peter\msedgedriver.exe'  # Update this path
-DEFAULT_URL = "https:/www.google.com"
+DEFAULT_URL = "https://www.google.com"
 OUTPUT_FILE_NAME = "web_automation_script.py"
 
 class CombinedAutomationApp:
     def __init__(self, master):
         self.master = master
-        master.title("Web Automation Tool")
-        master.geometry("800x700")
+        master.title("Web Automation Tool v7.15")
+        master.geometry("800x760")
 
         self.selenium_driver_path = SELENIUM_DRIVER_PATH  # Add this line
         
         self.setup_ui()
+        self.selector_check.state(['selected'])
+        self.current_window = None
         
         self.driver = None
         self.is_detecting = False
@@ -44,6 +46,7 @@ class CombinedAutomationApp:
         self.create_action_frame()
         self.create_action_list()
         self.create_control_buttons()
+        self.create_window_selection_frame()
 
     def create_url_frame(self):
         self.url_frame = tk.Frame(self.master)
@@ -54,6 +57,42 @@ class CombinedAutomationApp:
         self.url_entry = tk.Entry(self.url_frame, width=50)
         self.url_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 0))
         self.url_entry.insert(0, DEFAULT_URL)
+
+    def create_window_selection_frame(self):
+        self.window_frame = tk.Frame(self.master)
+        self.window_frame.pack(pady=10, padx=10, fill=tk.X)
+    
+        tk.Label(self.window_frame, text="Active Window:").pack(side=tk.LEFT)
+        self.window_dropdown = ttk.Combobox(self.window_frame, width=40)
+        self.window_dropdown.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 5))
+        self.window_dropdown.bind("<<ComboboxSelected>>", self.on_window_selected)
+    
+        self.refresh_button = tk.Button(self.window_frame, text="Refresh", command=self.refresh_windows)
+        self.refresh_button.pack(side=tk.RIGHT)
+    
+    def refresh_windows(self):
+        if self.driver:
+            window_handles = self.driver.window_handles
+            window_titles = []
+            for handle in window_handles:
+                self.driver.switch_to.window(handle)
+                window_titles.append(self.driver.title)
+            self.window_dropdown['values'] = window_titles
+            if len(window_titles) == 1:
+                self.window_dropdown.set(window_titles[0])
+                self.current_window = window_handles[0]
+            elif len(window_titles) > 1:
+                self.window_dropdown.set("Select a window")
+            self.master.focus_force()
+
+    def on_window_selected(self, event):
+        selected_title = self.window_dropdown.get()
+        for handle in self.driver.window_handles:
+            self.driver.switch_to.window(handle)
+            if self.driver.title == selected_title:
+                self.current_window = handle
+                break
+        self.detect_css()
 
     def update_copy_target(self):
         # This method will be called when either checkbox is clicked
@@ -105,7 +144,7 @@ class CombinedAutomationApp:
 
         self.selector_check = ttk.Checkbutton(primary_frame, command=self.update_copy_target)
         self.selector_check.pack(side=tk.LEFT, padx=5)
-        self.selector_check.state(['!alternate'])  # Unchecked by default
+        self.selector_check.state(['selected']) 
 
         # Alternate Selector Row
         alternate_frame = tk.Frame(self.selector_frame)
@@ -128,7 +167,7 @@ class CombinedAutomationApp:
         self.action_frame = tk.Frame(self.master)
         self.action_frame.pack(pady=10, padx=10, fill=tk.X)
     
-        self.action_types = ["Click", "Dropdown", "Input", "URL", "Sleep", "Keypress", "Relative Click"]
+        self.action_types = ["Click", "Dropdown", "Input", "URL", "Sleep", "Keypress", "Relative Click", "Windows Selector"]
         self.special_keys = ["", "Enter", "Tab", "Shift", "Ctrl", "Alt", "Esc", "Backspace", "Delete", "PageUp", "PageDown", "Home", "End", "Insert", "Up", "Down", "Left", "Right", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
         self.relative_directions = ["above", "below", "toLeftOf", "toRightOf", "near"]
     
@@ -196,35 +235,36 @@ class CombinedAutomationApp:
         if self.is_detecting:
             self.stop_detection()
             return
-
+    
         url = self.url_entry.get().strip()
         if not url.startswith(('http://', 'https://')):
             url = 'https://' + url
-        
+    
         try:
             result = urlparse(url)
             if all([result.scheme, result.netloc]):
                 options = Options()
                 options.add_argument("inprivate")
                 options.add_argument("--log-level=3")
+                options.add_experimental_option("detach", True)  # Keep browser open after script finishes
                 service = Service(self.selenium_driver_path)
                 self.driver = webdriver.Edge(service=service, options=options)
                 self.driver.get(url)
                 self.is_detecting = True
                 self.start_button.config(text="Stop Detection")
                 self.inject_mouse_move_script()
-                self.detect_css()
-                keyboard.on_press_key('shift', self.copy_to_clipboard)
-                
+                self.detect_css_wrapper()  # Use the wrapper to keep detecting CSS
+                keyboard.on_press_key('ctrl', self.copy_to_clipboard)
                 # Automatically add URL action
                 self.add_url_action(url)
+                # Force focus back to the Tkinter window
+                self.master.after(100, self.master.focus_force)
             else:
                 tk.messagebox.showerror("Invalid URL", "Please enter a valid URL.")
         except WebDriverException as e:
             tk.messagebox.showerror("WebDriver Error", f"Error initializing WebDriver: {str(e)}\n\nPlease check the WebDriver path and try again.")
         except Exception as e:
             tk.messagebox.showerror("Error", f"An error occurred: {str(e)}")
-
 
     def add_url_action(self, url):
         action = {"type": "url", "url": url}
@@ -241,23 +281,16 @@ class CombinedAutomationApp:
                 pass
         self.driver = None
         keyboard.unhook_all()
-        self.selector_display.config(text="")
+        self.selector_display.delete(0, tk.END)
+        self.alternate_selector_display.delete(0, tk.END)
         self.copy_status_label.config(text="")
 
     def inject_mouse_move_script(self):
         script = """
         window.lastElement = null;
-        window.addEventListener('mousemove', function(e) {
-            var element = document.elementFromPoint(e.clientX, e.clientY);
-            if (element !== window.lastElement) {
-                window.lastElement = element;
-                var selector = getFullSelector(element);
-                var alternateSelector = getAlternateSelector(element);
-                window.currentSelector = selector;
-                window.currentAlternateSelector = alternateSelector;
-            }
-        });
-
+        window.currentSelector = '';
+        window.currentAlternateSelector = '';
+        
         function getFullSelector(element) {
             if (!(element instanceof Element)) return '';
             var path = [];
@@ -283,7 +316,7 @@ class CombinedAutomationApp:
             }
             return path.join(' > ');
         }
-
+    
         function getAlternateSelector(element) {
             if (!(element instanceof Element)) return '';
             if (element.id) return '#' + element.id;
@@ -292,23 +325,38 @@ class CombinedAutomationApp:
             var classes = Array.from(element.classList).join('.');
             if (classes) return element.tagName.toLowerCase() + '.' + classes;
             
-            return getFullSelector(element);  // fallback to full selector
+            return getFullSelector(element);
         }
+    
+        document.addEventListener('mousemove', function(e) {
+            var element = document.elementFromPoint(e.clientX, e.clientY);
+            if (element !== window.lastElement) {
+                window.lastElement = element;
+                window.currentSelector = getFullSelector(element);
+                window.currentAlternateSelector = getAlternateSelector(element);
+            }
+        });
         """
         self.driver.execute_script(script)
 
+    def detect_css_wrapper(self):
+        if self.is_detecting:
+            self.detect_css()
+            self.master.after(1000, self.detect_css_wrapper)
 
     def detect_css(self):
         if not self.is_detecting:
             return
-
+    
         try:
+            if self.current_window:
+                self.driver.switch_to.window(self.current_window)   
             current_url = self.driver.current_url
             if current_url != self.url_entry.get():
                 self.url_entry.delete(0, tk.END)
                 self.url_entry.insert(0, current_url)
                 self.inject_mouse_move_script()
-
+    
             selector = self.driver.execute_script("return window.currentSelector || '';")
             alternate_selector = self.driver.execute_script("return window.currentAlternateSelector || '';")
             
@@ -316,19 +364,18 @@ class CombinedAutomationApp:
                 self.selector_display.delete(0, tk.END)
                 self.selector_display.insert(0, selector)
                 self.current_selector = selector
-
+    
             if alternate_selector:
                 self.alternate_selector_display.delete(0, tk.END)
                 self.alternate_selector_display.insert(0, alternate_selector)
                 self.current_alternate_selector = alternate_selector
-
+    
         except NoSuchWindowException:
             self.stop_detection()
         except Exception as e:
             print(f"Error in detect_css: {e}")
-
-        if self.is_detecting:
-            self.master.after(100, self.detect_css)
+    
+        self.master.update_idletasks()
 
     def copy_to_clipboard(self, e):
         if self.selector_check.instate(['selected']):
@@ -395,6 +442,10 @@ class CombinedAutomationApp:
             self.direction_label.grid()
             self.direction.grid()
             self.direction.set("")  # Reset direction dropdown
+        elif action_type == "Windows Selector":
+            self.selector_label.grid_remove()
+            self.selector.grid_remove()
+            self.text_label.config(text="Window Title:")
         
         # Clear all input fields
         self.selector.delete(0, tk.END)
@@ -463,6 +514,10 @@ class CombinedAutomationApp:
                 "direction": direction
             }
             display_text = f"Relative Click: Anchor {selector}, Target {target}, Direction: {direction}"
+
+        elif action_type == "windows selector":
+            action = {"type": "switch_window", "window_name": text}
+            display_text = f"Switch Window: {text}"
         else:
             messagebox.showwarning("Invalid Action", f"Unknown action type: {action_type}")
             return
@@ -472,13 +527,14 @@ class CombinedAutomationApp:
             try:
                 position = int(insert_position) - 1
                 self.actions.insert(position, action)
-                self.action_list.insert(position, display_text)
+                self.action_list.insert(position, f"{position + 1}. {display_text}")
+                self.renumber_actions()
             except ValueError:
                 messagebox.showwarning("Invalid Position", "Please enter a valid integer for the insert position.")
                 return
         else:
             self.actions.append(action)
-            self.action_list.insert(tk.END, display_text)
+            self.action_list.insert(tk.END, f"{self.action_list.size() + 1}. {display_text}")
         
         self.clear_input_fields()
 
@@ -494,8 +550,16 @@ class CombinedAutomationApp:
             index = self.action_list.curselection()[0]
             self.action_list.delete(index)
             self.actions.pop(index)
+            self.renumber_actions()
         except IndexError:
             messagebox.showwarning("Warning", "No action selected!")
+
+    def renumber_actions(self):
+        for i in range(self.action_list.size()):
+            item = self.action_list.get(i)
+            new_item = f"{i + 1}. {item.split('. ', 1)[1]}"
+            self.action_list.delete(i)
+            self.action_list.insert(i, new_item)
 
     def complete(self):
         if not self.actions:
@@ -516,6 +580,7 @@ class CombinedAutomationApp:
         try:
             actions_json = json.dumps(self.actions, indent=4)
             script_id = uuid.uuid4().hex[:8]
+            webdriver_path = self.webdriver_entry.get()
             code = f"""
 import logging
 import time
@@ -538,8 +603,8 @@ from selenium.webdriver.support.relative_locator import locate_with
 from typing import Callable, Dict, Any
 
 # Configuration
-SCRIPT_ID = "{script_id}"
-WEBDRIVER_PATH = r"C:\\Peter\\msedgedriver.exe"
+SCRIPT_ID = "250527d9"
+WEBDRIVER_PATH = r"{webdriver_path}"
 WAIT_TIME = 5
 RETRY_ATTEMPTS = 3
 DEBUG = True
@@ -648,6 +713,16 @@ class WebAutomation:
         relative_element = self.driver.find_element(relative_locator)
         relative_element.click()
 
+    def switch_to_window(self, window_name: str) -> None:
+        logger.info(f"Switching to window: {{window_name}}")
+        for handle in self.driver.window_handles:
+            self.driver.switch_to.window(handle)
+            if window_name in self.driver.title or window_name == handle:
+                logger.info(f"Switched to window: {{self.driver.title}}")
+                return
+        logger.error(f"Window not found: {{window_name}}")
+        raise NoSuchElementException(f"Window not found: {{window_name}}")
+
     def send_key(self, key: str) -> str:
         special_keys = {{
             'Enter': Keys.ENTER, 'Tab': Keys.TAB, 'Shift': Keys.SHIFT,
@@ -675,6 +750,11 @@ class WebAutomation:
                     self.wait_and_select(action["selector"], action["text"])
                 elif action_type == "click":
                     self.wait_and_click(action)
+                    # Add the code to print window handles and titles here
+                    print("Available window handles:")
+                    for handle in self.driver.window_handles:
+                        self.driver.switch_to.window(handle)
+                        print(f"Handle: {{handle}}, Title: {{self.driver.title}}")
                 elif action_type == "input":
                     self.wait_and_input(action["selector"], action["text"])
                 elif action_type == "sleep":
@@ -688,6 +768,9 @@ class WebAutomation:
                     active_element.send_keys(key)
                 elif action_type == "relative click":
                     self.wait_and_relative_click(action["anchor"], action["target"], action["direction"])
+                elif action_type == "switch_window":
+                    window_name = action["window_name"]
+                    self.switch_to_window(window_name)
                 else:
                     logger.warning(f"Unknown action type: {{action_type}}")
                 time.sleep(0.1)  # Small delay between actions
@@ -700,8 +783,7 @@ def show_error_popup(error_message):
     root.withdraw()  # Hide the main window
     with open(LOG_FILE, 'r') as log_file:
         lines = log_file.readlines()
-        last_log = lines[-1] if lines else "No log entries found."
-    error_text = f"Error: {{error_message}}\\n\\nLast log entry:\\n{{last_log}}"
+    error_text = f"Error: {{error_message}}"
     messagebox.showerror("Error", error_text)
     root.destroy()
 
@@ -710,13 +792,13 @@ def main():
     try:
         automation = WebAutomation(WEBDRIVER_PATH)
 
-        actions = {actions_json}
+        actions = {json.dumps(self.actions, indent=4)}
 
         for action in actions:
             automation.perform_action(action)
         logger.info("Script execution completed successfully.")
     except Exception as e:
-        logger.error(f"An error occurred: {{e}}")
+        logger.error(f"An error occurred: {{{{e}}}}")
         if DEBUG:
             logger.error(traceback.format_exc())
         show_error_popup(str(e))
@@ -728,11 +810,10 @@ def main():
                     break
                 time.sleep(0.2)
             automation.driver.quit()
-        logger.info(f"Log file saved as {{LOG_FILE}}")
+        logger.info(f"Log file saved as {{{{LOG_FILE}}}}")
 
 if __name__ == "__main__":
     main()
-
     """
             return code
         except Exception as e:
