@@ -23,7 +23,7 @@ OUTPUT_FILE_NAME = "web_automation_script.py"
 class CombinedAutomationApp:
     def __init__(self, master):
         self.master = master
-        master.title("Web Automation Tool v7.15")
+        master.title("Web Automation Tool v7.17")
         master.geometry("800x760")
 
         self.selenium_driver_path = SELENIUM_DRIVER_PATH  # Add this line
@@ -47,6 +47,7 @@ class CombinedAutomationApp:
         self.create_action_list()
         self.create_control_buttons()
         self.create_window_selection_frame()
+        self.on_action_type_change(None)
 
     def create_url_frame(self):
         self.url_frame = tk.Frame(self.master)
@@ -167,14 +168,14 @@ class CombinedAutomationApp:
         self.action_frame = tk.Frame(self.master)
         self.action_frame.pack(pady=10, padx=10, fill=tk.X)
     
-        self.action_types = ["Click", "Dropdown", "Input", "URL", "Sleep", "Keypress", "Relative Click", "Windows Selector"]
+        self.action_types = ["Click", "Dropdown", "Input", "Ask and Input", "Windows Selector", "Keypress", "Sleep", "Relative Click", "URL"]
         self.special_keys = ["", "Enter", "Tab", "Shift", "Ctrl", "Alt", "Esc", "Backspace", "Delete", "PageUp", "PageDown", "Home", "End", "Insert", "Up", "Down", "Left", "Right", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
         self.relative_directions = ["above", "below", "toLeftOf", "toRightOf", "near"]
     
         ttk.Label(self.action_frame, text="Action Type:").grid(row=0, column=0, padx=5, pady=5)
         self.action_type = ttk.Combobox(self.action_frame, values=self.action_types)
         self.action_type.grid(row=0, column=1, padx=5, pady=5)
-        self.action_type.set(self.action_types[0])
+        self.action_type.set("Click")  # Set default action type to "Click"
         self.action_type.bind("<<ComboboxSelected>>", self.on_action_type_change)
     
         self.selector_label = ttk.Label(self.action_frame, text="Selector:")
@@ -195,8 +196,7 @@ class CombinedAutomationApp:
     
         self.special_key_input = ttk.Entry(self.action_frame, width=5, state='disabled')
         self.special_key_input.grid(row=3, column=2, padx=5, pady=5)
-    
-        # New fields for Relative Click
+   
         self.target_label = ttk.Label(self.action_frame, text="Target Selector:")
         self.target_label.grid(row=4, column=0, padx=5, pady=5)
         self.target = ttk.Entry(self.action_frame, width=50)
@@ -215,6 +215,7 @@ class CombinedAutomationApp:
     
         self.add_button = ttk.Button(self.action_frame, text="Add", command=self.add_action)
         self.add_button.grid(row=6, column=0, columnspan=2, pady=10)
+        self.on_action_type_change(None)
 
     def create_action_list(self):
         self.action_list = tk.Listbox(self.master, width=70, height=10, selectmode=tk.SINGLE)
@@ -446,6 +447,9 @@ class CombinedAutomationApp:
             self.selector_label.grid_remove()
             self.selector.grid_remove()
             self.text_label.config(text="Window Title:")
+        elif action_type == "Ask and Input":
+            self.text_label.grid_remove()
+            self.text.grid_remove()
         
         # Clear all input fields
         self.selector.delete(0, tk.END)
@@ -514,10 +518,12 @@ class CombinedAutomationApp:
                 "direction": direction
             }
             display_text = f"Relative Click: Anchor {selector}, Target {target}, Direction: {direction}"
-
         elif action_type == "windows selector":
             action = {"type": "switch_window", "window_name": text}
             display_text = f"Switch Window: {text}"
+        elif action_type == "Ask and input":
+            action = {"type": action_type, "selector": selector}
+            display_text = f"Ask and Input: {selector}"
         else:
             messagebox.showwarning("Invalid Action", f"Unknown action type: {action_type}")
             return
@@ -589,7 +595,7 @@ import keyboard
 import json
 import os
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, simpledialog
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
@@ -649,6 +655,16 @@ class WebAutomation:
         element = self.driver.find_element(by, selector)
         self.driver.execute_script("arguments[0].scrollIntoView({{block: 'center'}});", element)
         time.sleep(0.5)  # Allow time for scrolling animation
+
+    def ask_and_input(self, selector: str, prompt: str) -> None:
+        root = tk.Tk()
+        root.withdraw()
+        user_input = simpledialog.askstring("Input", prompt)
+        root.destroy()
+        if user_input is not None:
+            self.wait_and_input(selector, user_input)
+        else:
+            logger.warning(f"User cancelled input for prompt: {{prompt}}")
 
     def retry_on_stale(func: Callable) -> Callable:
         def wrapper(*args, **kwargs):
@@ -771,6 +787,8 @@ class WebAutomation:
                 elif action_type == "switch_window":
                     window_name = action["window_name"]
                     self.switch_to_window(window_name)
+                elif action_type == "Ask and input":
+                    self.ask_and_input(action["selector"], action["prompt"])
                 else:
                     logger.warning(f"Unknown action type: {{action_type}}")
                 time.sleep(0.1)  # Small delay between actions
