@@ -23,7 +23,7 @@ OUTPUT_FILE_NAME = "web_automation_script.py"
 class CombinedAutomationApp:
     def __init__(self, master):
         self.master = master
-        master.title("Web Automation Tool v7.17")
+        master.title("Web Automation Tool v7.18")
         master.geometry("800x760")
 
         self.selenium_driver_path = SELENIUM_DRIVER_PATH  # Add this line
@@ -168,7 +168,7 @@ class CombinedAutomationApp:
         self.action_frame = tk.Frame(self.master)
         self.action_frame.pack(pady=10, padx=10, fill=tk.X)
     
-        self.action_types = ["Click", "Dropdown", "Input", "Ask and Input", "Windows Selector", "Keypress", "Sleep", "Relative Click", "URL"]
+        self.action_types = ["Click", "Dropdown", "Input", "Ask and input", "Windows Selector", "Keypress", "Sleep", "Relative Click", "URL"]
         self.special_keys = ["", "Enter", "Tab", "Shift", "Ctrl", "Alt", "Esc", "Backspace", "Delete", "PageUp", "PageDown", "Home", "End", "Insert", "Up", "Down", "Left", "Right", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
         self.relative_directions = ["above", "below", "toLeftOf", "toRightOf", "near"]
     
@@ -447,7 +447,7 @@ class CombinedAutomationApp:
             self.selector_label.grid_remove()
             self.selector.grid_remove()
             self.text_label.config(text="Window Title:")
-        elif action_type == "Ask and Input":
+        elif action_type == "Ask and input":
             self.text_label.grid_remove()
             self.text.grid_remove()
         
@@ -521,9 +521,9 @@ class CombinedAutomationApp:
         elif action_type == "windows selector":
             action = {"type": "switch_window", "window_name": text}
             display_text = f"Switch Window: {text}"
-        elif action_type == "Ask and input":
-            action = {"type": action_type, "selector": selector}
-            display_text = f"Ask and Input: {selector}"
+        elif action_type == "ask and input":
+            action = {"type": action_type, "selector": selector, "prompt": "Enter value:"}
+            display_text = f"Ask and input: {selector}"
         else:
             messagebox.showwarning("Invalid Action", f"Unknown action type: {action_type}")
             return
