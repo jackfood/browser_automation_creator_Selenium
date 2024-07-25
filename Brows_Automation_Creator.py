@@ -17,8 +17,8 @@ import logging
 
 # User Configuration Section
 SELENIUM_DRIVER_PATH = r'C:\Peter\msedgedriver.exe'  # Update this path
-DEFAULT_URL = "https://eup.singhealth.com.sg:8443/eu-portal/landing.action"
-OUTPUT_FILE_NAME = "web_automation_script.txt"
+DEFAULT_URL = "https://www.google.com"
+OUTPUT_FILE_NAME = "web_automation_script.py"
 
 class CombinedAutomationApp:
     def __init__(self, master):
