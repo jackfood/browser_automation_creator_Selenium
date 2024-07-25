@@ -17,14 +17,14 @@ import logging
 
 # User Configuration Section
 SELENIUM_DRIVER_PATH = r'C:\Peter\msedgedriver.exe'  # Update this path
-DEFAULT_URL = "https://www.google.com"
-OUTPUT_FILE_NAME = "web_automation_script.py"
+DEFAULT_URL = "https://eup.singhealth.com.sg:8443/eu-portal/landing.action"
+OUTPUT_FILE_NAME = "web_automation_script.txt"
 
 class CombinedAutomationApp:
     def __init__(self, master):
         self.master = master
-        master.title("Web Automation Tool v7.18")
-        master.geometry("800x760")
+        master.title("Web Automation Tool v7.3")
+        master.geometry("800x800")
 
         self.selenium_driver_path = SELENIUM_DRIVER_PATH  # Add this line
         
@@ -168,7 +168,7 @@ class CombinedAutomationApp:
         self.action_frame = tk.Frame(self.master)
         self.action_frame.pack(pady=10, padx=10, fill=tk.X)
     
-        self.action_types = ["Click", "Dropdown", "Input", "Ask and input", "Windows Selector", "Keypress", "Sleep", "Relative Click", "URL"]
+        self.action_types = ["Click", "Dropdown", "Input", "ask and input", "Windows Selector", "Keypress", "Sleep", "Relative Click", "URL", "MouseOver"]
         self.special_keys = ["", "Enter", "Tab", "Shift", "Ctrl", "Alt", "Esc", "Backspace", "Delete", "PageUp", "PageDown", "Home", "End", "Insert", "Up", "Down", "Left", "Right", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
         self.relative_directions = ["above", "below", "toLeftOf", "toRightOf", "near"]
     
@@ -447,7 +447,10 @@ class CombinedAutomationApp:
             self.selector_label.grid_remove()
             self.selector.grid_remove()
             self.text_label.config(text="Window Title:")
-        elif action_type == "Ask and input":
+        elif action_type == "ask and input":
+            self.text_label.grid_remove()
+            self.text.grid_remove()
+        elif action_type == "MouseOver":
             self.text_label.grid_remove()
             self.text.grid_remove()
         
@@ -524,6 +527,9 @@ class CombinedAutomationApp:
         elif action_type == "ask and input":
             action = {"type": action_type, "selector": selector, "prompt": "Enter value:"}
             display_text = f"Ask and input: {selector}"
+        elif action_type == "MouseOver":
+            self.text_label.grid_remove()
+            self.text.grid_remove()
         else:
             messagebox.showwarning("Invalid Action", f"Unknown action type: {action_type}")
             return
@@ -584,10 +590,19 @@ class CombinedAutomationApp:
 
     def generate_code(self):
         try:
-            actions_json = json.dumps(self.actions, indent=4)
+            renamed_actions = []
+            for action in self.actions:
+                renamed_action = action.copy()
+                if 'selector' in renamed_action:
+                    renamed_action['name'] = renamed_action.pop('selector')
+                renamed_actions.append(renamed_action)
+            
+            actions_json = json.dumps(renamed_actions, indent=4)
             script_id = uuid.uuid4().hex[:8]
             webdriver_path = self.webdriver_entry.get()
-            code = f"""
+    
+            # Define the main parts of the script
+            imports = """
 import logging
 import time
 import traceback
@@ -606,10 +621,12 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.edge.options import Options
 from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, WebDriverException, NoSuchElementException
 from selenium.webdriver.support.relative_locator import locate_with
-from typing import Callable, Dict, Any
+from typing import Callable, Dict, Any, Union
+"""
 
+            config = f"""
 # Configuration
-SCRIPT_ID = "250527d9"
+SCRIPT_ID = "{script_id}"
 WEBDRIVER_PATH = r"{webdriver_path}"
 WAIT_TIME = 5
 RETRY_ATTEMPTS = 3
@@ -629,7 +646,9 @@ logging.basicConfig(
     filemode='w'
 )
 logger = logging.getLogger(__name__)
+"""
 
+            web_automation_class = """
 class WebAutomation:
     def __init__(self, driver_path: str):
         self.driver_path = driver_path
@@ -641,106 +660,117 @@ class WebAutomation:
         edge_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         edge_options.add_experimental_option('useAutomationExtension', False)
         edge_options.add_argument("inprivate")
-        edge_options.add_experimental_option("prefs", {{"profile.default_content_setting_values.notifications": 2}})
+        edge_options.add_experimental_option("prefs", {"profile.default_content_setting_values.notifications": 2})
         driver = webdriver.Edge(service=service, options=edge_options)
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}})")
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         return driver
 
-    def wait_for_element(self, selector: str, condition: Callable, timeout: int = WAIT_TIME) -> Any:
-        logger.debug(f"Waiting for element: {{selector}}")
-        return WebDriverWait(self.driver, timeout).until(condition((By.CSS_SELECTOR, selector)))
+    def wait_for_element(self, name: str, condition: Callable, timeout: int = WAIT_TIME) -> Any:
+        logger.debug(f"Waiting for element: {name}")
+        return WebDriverWait(self.driver, timeout).until(condition((By.CSS_SELECTOR, name)))
 
-    def scroll_into_view(self, selector: str, by: By = By.CSS_SELECTOR) -> None:
-        logger.debug(f"Scrolling element into view: {{selector}}")
-        element = self.driver.find_element(by, selector)
-        self.driver.execute_script("arguments[0].scrollIntoView({{block: 'center'}});", element)
-        time.sleep(0.5)  # Allow time for scrolling animation
+    def scroll_into_view(self, name: str, by: By = By.CSS_SELECTOR) -> None:
+        logger.debug(f"Scrolling element into view: {name}")
+        element = self.driver.find_element(by, name)
+        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+        time.sleep(0.05)  # Allow time for scrolling animation
 
-    def ask_and_input(self, selector: str, prompt: str) -> None:
+    def ask_and_input(self, name: str, prompt: str) -> None:
         root = tk.Tk()
         root.withdraw()
         user_input = simpledialog.askstring("Input", prompt)
         root.destroy()
         if user_input is not None:
-            self.wait_and_input(selector, user_input)
+            self.wait_and_input(name, user_input)
         else:
-            logger.warning(f"User cancelled input for prompt: {{prompt}}")
+            logger.warning(f"User cancelled input for prompt: {prompt}")
 
-    def retry_on_stale(func: Callable) -> Callable:
+    def retry_on_stale(func):
         def wrapper(*args, **kwargs):
             for attempt in range(RETRY_ATTEMPTS):
                 try:
                     return func(*args, **kwargs)
                 except StaleElementReferenceException:
-                    logger.warning(f"Stale element reference exception. Retrying (attempt {{attempt + 1}}/{{RETRY_ATTEMPTS}})")
-                    time.sleep(0.2)  # Add a small delay before retrying
+                    logger.warning(f"Stale element reference exception. Retrying (attempt {attempt + 1}/{RETRY_ATTEMPTS})")
+                    time.sleep(0.05)  # Add a small delay before retrying
                     if attempt == RETRY_ATTEMPTS - 1:
                         raise
         return wrapper
 
     @retry_on_stale
     def wait_and_click(self, action: Dict[str, Any]) -> None:
-        selector = action["selector"]
+        name = action["name"]
         by = action.get("by", By.CSS_SELECTOR)
         timeout = action.get("timeout", WAIT_TIME)
         scroll = action.get("scroll", True)
 
         if scroll:
-            self.scroll_into_view(selector, by)
+            self.scroll_into_view(name, by)
 
         try:
-            element = WebDriverWait(self.driver, timeout).until(EC.element_to_be_clickable((by, selector)))
-            logger.info(f"Clicking element: {{selector}}")
+            element = WebDriverWait(self.driver, timeout).until(EC.element_to_be_clickable((by, name)))
+            logger.info(f"Clicking element: {name}")
             element.click()
         except TimeoutException:
-            logger.error(f"Element not clickable: {{selector}}")
+            logger.error(f"Element not clickable: {name}")
             raise
 
     @retry_on_stale
-    def wait_and_input(self, selector: str, text: str) -> None:
-        self.scroll_into_view(selector)
-        element = self.wait_for_element(selector, EC.element_to_be_clickable)
-        logger.info(f"Inputting text: {{text}}")
-        element.clear()
-        element.send_keys(text)
+    def wait_and_input(self, name: str, text: str) -> None:
+        if name:
+            self.scroll_into_view(name)
+            element = self.wait_for_element(name, EC.element_to_be_clickable)
+            logger.info(f"Inputting text: {text}")
+            element.clear()
+            element.send_keys(text)
+        else:
+            logger.info(f"Pasting text: {text}")
+            ActionChains(self.driver).send_keys(text).perform()
 
     @retry_on_stale
-    def wait_and_select(self, selector: str, text: str) -> None:
-        self.scroll_into_view(selector)
-        dropdown = self.wait_for_element(selector, EC.element_to_be_clickable)
+    def wait_and_select(self, name: str, text: str) -> None:
+        self.scroll_into_view(name)
+        dropdown = self.wait_for_element(name, EC.element_to_be_clickable)
         
         try:
             select = Select(dropdown)
-            logger.info(f"Selecting option: {{text}}")
+            logger.info(f"Selecting option: {text}")
             select.select_by_visible_text(text)
         except WebDriverException:
             # If it's not a <select> element, try to handle it as a custom dropdown
-            logger.info(f"Handling as custom dropdown: {{selector}}")
+            logger.info(f"Handling as custom dropdown: {name}")
             dropdown.click()
-            time.sleep(0.3)  # Wait for dropdown to expand
-            option = self.driver.find_element(By.XPATH, f"//*[contains(text(), '{{text}}')]")
+            time.sleep(0.05)  # Wait for dropdown to expand
+            option = self.driver.find_element(By.XPATH, f"//*[contains(text(), '{text}')]")
             option.click()
 
-    def wait_and_relative_click(self, anchor_selector: str, target_selector: str, direction: str) -> None:
-        logger.debug(f"Waiting for anchor element: {{anchor_selector}}")
-        anchor = self.wait_for_element(anchor_selector, EC.presence_of_element_located)
-        logger.info(f"Clicking element relative to {{anchor_selector}}: {{direction}}")
-        relative_locator = getattr(locate_with(By.CSS_SELECTOR, target_selector), direction)(anchor)
+    @retry_on_stale
+    def wait_and_mouseover(self, name: str) -> None:
+        self.scroll_into_view(name)
+        element = self.wait_for_element(name, EC.presence_of_element_located)
+        logger.info(f"Moving mouse over element: {name}")
+        ActionChains(self.driver).move_to_element(element).perform()
+
+    def wait_and_relative_click(self, anchor_name: str, target_name: str, direction: str) -> None:
+        logger.debug(f"Waiting for anchor element: {anchor_name}")
+        anchor = self.wait_for_element(anchor_name, EC.presence_of_element_located)
+        logger.info(f"Clicking element relative to {anchor_name}: {direction}")
+        relative_locator = getattr(locate_with(By.CSS_SELECTOR, target_name), direction)(anchor)
         relative_element = self.driver.find_element(relative_locator)
         relative_element.click()
 
     def switch_to_window(self, window_name: str) -> None:
-        logger.info(f"Switching to window: {{window_name}}")
+        logger.info(f"Switching to window: {window_name}")
         for handle in self.driver.window_handles:
             self.driver.switch_to.window(handle)
             if window_name in self.driver.title or window_name == handle:
-                logger.info(f"Switched to window: {{self.driver.title}}")
+                logger.info(f"Switched to window: {self.driver.title}")
                 return
-        logger.error(f"Window not found: {{window_name}}")
-        raise NoSuchElementException(f"Window not found: {{window_name}}")
+        logger.error(f"Window not found: {window_name}")
+        raise NoSuchElementException(f"Window not found: {window_name}")
 
-    def send_key(self, key: str) -> str:
-        special_keys = {{
+    def send_key(self, key: str) -> Union[str, Keys]:
+        special_keys = {
             'Enter': Keys.ENTER, 'Tab': Keys.TAB, 'Shift': Keys.SHIFT,
             'Ctrl': Keys.CONTROL, 'Alt': Keys.ALT, 'Esc': Keys.ESCAPE,
             'Backspace': Keys.BACKSPACE, 'Delete': Keys.DELETE,
@@ -748,60 +778,64 @@ class WebAutomation:
             'Up': Keys.ARROW_UP, 'Down': Keys.ARROW_DOWN,
             'Left': Keys.ARROW_LEFT, 'Right': Keys.ARROW_RIGHT,
             'Home': Keys.HOME, 'End': Keys.END, 'Insert': Keys.INSERT,
-            **{{f'F{{i}}': getattr(Keys, f'F{{i}}') for i in range(1, 13)}}
-        }}
+            **{f'F{i}': getattr(Keys, f'F{i}') for i in range(1, 13)}
+        }
         if '+' in key:
             modifier, letter = key.split('+')
-            return getattr(Keys, modifier.upper()) + letter.lower()
+            modifier_key = special_keys.get(modifier.capitalize(), modifier)
+            return f"{modifier_key}+{letter.lower()}"
         return special_keys.get(key, key)
 
     def perform_action(self, action: Dict[str, Any]) -> None:
-            action_type = action["type"]
-            logger.info(f"Performing action: {{action_type}}")
-            try:
-                if action_type == "url":
-                    self.driver.get(action["url"])
-                    WebDriverWait(self.driver, WAIT_TIME).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-                elif action_type == "dropdown":
-                    self.wait_and_select(action["selector"], action["text"])
-                elif action_type == "click":
-                    self.wait_and_click(action)
-                    # Add the code to print window handles and titles here
-                    print("Available window handles:")
-                    for handle in self.driver.window_handles:
-                        self.driver.switch_to.window(handle)
-                        print(f"Handle: {{handle}}, Title: {{self.driver.title}}")
-                elif action_type == "input":
-                    self.wait_and_input(action["selector"], action["text"])
-                elif action_type == "sleep":
-                    duration = action["duration"] / 1000
-                    logger.info(f"Sleeping for {{duration}} seconds")
-                    time.sleep(duration)
-                elif action_type == "keypress":
-                    key = self.send_key(action["key"])
-                    logger.info(f"Pressing key: {{action['key']}}")
+        action_type = action["type"]
+        logger.info(f"Performing action: {action_type}")
+        try:
+            if action_type == "url":
+                self.driver.get(action["url"])
+                WebDriverWait(self.driver, WAIT_TIME).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            elif action_type == "dropdown":
+                self.wait_and_select(action["name"], action["text"])
+            elif action_type == "click":
+                self.wait_and_click(action)
+            elif action_type == "input":
+                self.wait_and_input(action.get("name", ""), action["text"])
+            elif action_type == "paste":
+                self.wait_and_input("", action["text"])
+            elif action_type == "sleep":
+                duration = action["duration"] / 1000
+                logger.info(f"Sleeping for {duration} seconds")
+                time.sleep(duration)
+            elif action_type == "keypress":
+                key = self.send_key(action["key"])
+                logger.info(f"Pressing key: {action['key']}")
+                if isinstance(key, str) and '+' in key:
+                    modifier, letter = key.split('+')
+                    ActionChains(self.driver).key_down(modifier).send_keys(letter).key_up(modifier).perform()
+                else:
                     active_element = self.driver.switch_to.active_element
                     active_element.send_keys(key)
-                elif action_type == "relative click":
-                    self.wait_and_relative_click(action["anchor"], action["target"], action["direction"])
-                elif action_type == "switch_window":
-                    window_name = action["window_name"]
-                    self.switch_to_window(window_name)
-                elif action_type == "Ask and input":
-                    self.ask_and_input(action["selector"], action["prompt"])
-                else:
-                    logger.warning(f"Unknown action type: {{action_type}}")
-                time.sleep(0.1)  # Small delay between actions
-            except Exception as e:
-                logger.error(f"Error performing action {{action_type}}: {{e}}")
-                raise
-    
+            elif action_type == "relative click":
+                self.wait_and_relative_click(action["anchor"], action["target"], action["direction"])
+            elif action_type == "switch_window":
+                window_name = action["window_name"]
+                self.switch_to_window(window_name)
+            elif action_type == "ask and input":
+                self.ask_and_input(action["name"], action["prompt"])
+            elif action_type == "mouseover":
+                self.wait_and_mouseover(action["name"])
+            else:
+                logger.warning(f"Unknown action type: {action_type}")
+            time.sleep(0.05)  # Small delay between actions
+        except Exception as e:
+            logger.error(f"Error performing action {action_type}: {e}")
+            raise
+
 def show_error_popup(error_message):
     root = tk.Tk()
     root.withdraw()  # Hide the main window
     with open(LOG_FILE, 'r') as log_file:
         lines = log_file.readlines()
-    error_text = f"Error: {{error_message}}"
+    error_text = f"Error: {error_message}"
     messagebox.showerror("Error", error_text)
     root.destroy()
 
@@ -810,13 +844,13 @@ def main():
     try:
         automation = WebAutomation(WEBDRIVER_PATH)
 
-        actions = {json.dumps(self.actions, indent=4)}
+        actions = {actions_json}
 
         for action in actions:
             automation.perform_action(action)
         logger.info("Script execution completed successfully.")
     except Exception as e:
-        logger.error(f"An error occurred: {{{{e}}}}")
+        logger.error(f"An error occurred: {e}")
         if DEBUG:
             logger.error(traceback.format_exc())
         show_error_popup(str(e))
@@ -828,11 +862,16 @@ def main():
                     break
                 time.sleep(0.2)
             automation.driver.quit()
-        logger.info(f"Log file saved as {{{{LOG_FILE}}}}")
+        logger.info(f"Log file saved as {LOG_FILE}")
 
 if __name__ == "__main__":
     main()
-    """
+"""
+            code = imports + config + web_automation_class
+    
+            # Replace the actions JSON in the main function
+            code = code.replace('{actions_json}', actions_json)
+    
             return code
         except Exception as e:
             messagebox.showerror("Error Generating Code", f"An error occurred while generating the code:\n\n{str(e)}")
