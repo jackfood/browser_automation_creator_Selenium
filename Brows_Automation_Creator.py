@@ -168,7 +168,7 @@ class CombinedAutomationApp:
         self.action_frame = tk.Frame(self.master)
         self.action_frame.pack(pady=10, padx=10, fill=tk.X)
     
-        self.action_types = ["Click", "Dropdown", "Input", "ask and input", "Windows Selector", "Keypress", "Sleep", "Relative Click", "URL", "MouseOver"]
+        self.action_types = ["Click", "Dropdown", "Input", "ask and input", "Windows Selector", "Keypress", "Sleep", "Relative Click", "URL", "mouseover"]
         self.special_keys = ["", "Enter", "Tab", "Shift", "Ctrl", "Alt", "Esc", "Backspace", "Delete", "PageUp", "PageDown", "Home", "End", "Insert", "Up", "Down", "Left", "Right", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
         self.relative_directions = ["above", "below", "toLeftOf", "toRightOf", "near"]
     
@@ -527,9 +527,9 @@ class CombinedAutomationApp:
         elif action_type == "ask and input":
             action = {"type": action_type, "selector": selector, "prompt": "Enter value:"}
             display_text = f"Ask and input: {selector}"
-        elif action_type == "MouseOver":
-            self.text_label.grid_remove()
-            self.text.grid_remove()
+        elif action_type == "mouseover":
+            action = {"type": action_type, "selector": selector}
+            display_text = f"MouseOver: {selector}"
         else:
             messagebox.showwarning("Invalid Action", f"Unknown action type: {action_type}")
             return
@@ -867,6 +867,7 @@ def main():
 if __name__ == "__main__":
     main()
 """
+    
             code = imports + config + web_automation_class
     
             # Replace the actions JSON in the main function
