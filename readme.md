@@ -6,7 +6,7 @@ This Web Automation Tool is a powerful Python-based application that allows user
 
 ## Features
 
-- **User-friendly GUI**: Easy-to-use interface for creating and managing automation scripts.
+- **User-friendly GUI**: Easy-to-use interface for creating and managing automation scripts in python.
 - **Multiple Action Types**: Supports various action types including clicks, input, dropdown selection, URL navigation, and more.
 - **Relative Element Selection**: Ability to select elements relative to others, enhancing flexibility.
 - **Window Management**: Switch between different browser windows during automation.
@@ -55,9 +55,9 @@ This Web Automation Tool is a powerful Python-based application that allows user
 
 4. Use 'Ctrl' to copy element selectors.
 
-5. When your script is ready, click "Complete" to generate the Python script.
+5. When your script is ready, click "Complete" to generate the Python script. It will save the Python script to your desktop.
 
-6. Run the generated script to execute your automation.
+6. Run the generated python script to execute your automation.
 
 ## Action Types
 
