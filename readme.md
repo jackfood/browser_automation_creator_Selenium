@@ -1,4 +1,4 @@
-# Web Automation Tool v7.7
+# Web Automation Tool v1.7.7
 
 ## Overview
 
