@@ -1,24 +1,27 @@
-# Web Automation Tool
+# Web Automation Tool v7.7
 
-This project is a Python-based web automation tool with a graphical user interface (GUI). It allows users to create, manage, and execute web automation scripts without writing code.
+## Overview
+
+This Web Automation Tool is a powerful Python-based application that allows users to create, manage, and execute web automation scripts with ease. It combines a user-friendly GUI for script creation with a robust backend for script execution, making it suitable for both beginners and advanced users.
 
 ## Features
 
-- User-friendly GUI for creating web automation scripts
-- Supports various action types: Click, Input, Dropdown selection, URL navigation, Sleep, and Keypress
-- Real-time CSS selector detection
-- Easy-to-use action management (add, remove, reorder)
-- Generates executable Python scripts
-- Uses Selenium WebDriver for browser automation
+- **User-friendly GUI**: Easy-to-use interface for creating and managing automation scripts.
+- **Multiple Action Types**: Supports various action types including clicks, input, dropdown selection, URL navigation, and more.
+- **Relative Element Selection**: Ability to select elements relative to others, enhancing flexibility.
+- **Window Management**: Switch between different browser windows during automation.
+- **Loop Support**: Create loops within your automation scripts for repetitive tasks.
+- **Dynamic User Input**: Ability to prompt for user input during script execution.
+- **Error Handling**: Robust error handling with user-friendly popups and detailed logging.
+- **Visualization**: Option to visually highlight elements during script execution for better debugging.
+- **Extensible**: Easy to add new action types and extend functionality.
 
 ## Requirements
 
-- Python 3.x
-- Tkinter
+- Python 3.6+
 - Selenium WebDriver
 - Microsoft Edge WebDriver
-- pyperclip
-- keyboard
+- Additional Python packages: tkinter, keyboard, pyperclip
 
 ## Installation
 
@@ -29,12 +32,12 @@ This project is a Python-based web automation tool with a graphical user interfa
 
 2. Install the required Python packages:
    ```
-   pip install selenium pyperclip keyboard
+   pip install selenium keyboard pyperclip
    ```
 
-3. Download the Microsoft Edge WebDriver that matches your Edge browser version and place it in a known location on your computer.
+3. Download and install the Microsoft Edge WebDriver that matches your Edge browser version.
 
-4. Update the `SELENIUM_DRIVER_PATH` variable in the script with the path to your Edge WebDriver.
+4. Update the `SELENIUM_DRIVER_PATH` in the script to point to your Edge WebDriver location.
 
 ## Usage
 
@@ -43,33 +46,59 @@ This project is a Python-based web automation tool with a graphical user interfa
    python web_automation_tool.py
    ```
 
-2. Enter the URL of the website you want to automate in the URL field. (Auto Entry to the first step of automation)
+2. Use the GUI to create your automation script:
+   - Enter the starting URL
+   - Add actions (click, input, select, etc.)
+   - Arrange and modify actions as needed
 
-3. Click "Start Detection" to open the browser and start detecting CSS selectors.
+3. Click "Start Detection" to begin the element detection process.
 
-4. Hover over elements on the webpage to see their CSS selectors.
+4. Use 'Ctrl' to copy element selectors.
 
-5. Press 'Ctrl' Key to copy the current selector to the clipboard.
+5. When your script is ready, click "Complete" to generate the Python script.
 
-6. Use the GUI to add actions (Click, Input, Dropdown, etc.) to your automation script.
-
-7. Click "Complete" to generate and save the Python script for your automation.
-
-8. The generated script will be saved on your Desktop as "web_automation_script.txt".
-
-9. Copy the script and run it in python.
+6. Run the generated script to execute your automation.
 
 ## Action Types
 
-- **Click**: Click on an element
-- **Input**: Enter text into an input field
-- **Dropdown**: Select an option from a dropdown menu
 - **URL**: Navigate to a specific URL
-- **Sleep**: Pause the script for a specified duration
+- **Click**: Click on an element
+- **Dropdown**: Select an option from a dropdown
+- **Input**: Enter text into an input field
+- **Sleep**: Wait for a specified duration
 - **Keypress**: Simulate a keyboard key press
+- **Relative Click**: Click on an element relative to another
+- **Switch Window**: Switch to a different browser window
+- **Ask and Input**: Prompt for user input during execution
+- **MouseOver**: Hover over an element
 
-## Notes
+## Advanced Features
 
-- The tool uses Microsoft Edge in InPrivate mode for automation.
-- Generated scripts include error handling and logging for better debugging.
-- Press F10 to close the browser when running the generated script.
+- **Loop Control**: Create loops in your automation script for repetitive tasks.
+- **Relative Element Selection**: Select elements based on their position relative to other elements.
+- **Dynamic User Input**: Prompt for user input during script execution for more flexible automation.
+- **Visual Debugging**: Option to highlight elements as they're interacted with during script execution.
+
+## Error Handling
+
+The tool includes robust error handling:
+- Detailed logging of all actions and errors
+- User-friendly popups for common issues like element not found
+- Options to skip, retry, or exit when encountering errors
+
+## Customization
+
+You can easily extend the tool by adding new action types or modifying existing ones in the `WebAutomation` class.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+
+## Disclaimer
+
+This tool is for educational and personal use only. Be sure to comply with the terms of service of any websites you automate. The authors are not responsible for any misuse of this tool.
+This form is created by Claude.ai Sonnet 3.5.
