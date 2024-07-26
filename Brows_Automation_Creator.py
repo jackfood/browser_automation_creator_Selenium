@@ -14,6 +14,7 @@ import keyboard
 import json
 import os
 import logging
+import ast
 
 # User Configuration Section
 SELENIUM_DRIVER_PATH = r'C:\Peter\msedgedriver.exe'
@@ -23,10 +24,26 @@ OUTPUT_FILE_NAME = "web_automation_script.py"
 class CombinedAutomationApp:
     def __init__(self, master):
         self.master = master
-        master.title("Web Automation Tool v7.6")
-        master.geometry("800x850")
+        master.title("Web Automation Tool v7.8")
+        master.geometry("500x750")
+
+        self.canvas = tk.Canvas(master)
+        self.scrollbar = tk.Scrollbar(master, orient="vertical", command=self.canvas.yview)
+        self.master = tk.Frame(self.canvas)
+        self.master.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(
+                scrollregion=self.canvas.bbox("all")
+            )
+        )
+    
+        self.canvas.create_window((0, 0), window=self.master, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
         self.selenium_driver_path = SELENIUM_DRIVER_PATH
-        self.enable_visualization = tk.BooleanVar()
+        self.enable_visualization = tk.BooleanVar()  # Initialize here
         self.setup_ui()
         self.selector_check.state(['selected'])
         self.current_window = None
@@ -37,6 +54,16 @@ class CombinedAutomationApp:
         self.loop_start = None
         self.loop_end = None
         self.actions = []
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.style = ttk.Style()
+        self.style.configure("TFrame", background="white")
+        self.style.configure("TLabel", background="white")
+        self.style.configure("TButton", background="white")
+        self.master.configure(background="white")
+        self.canvas.configure(background="white")
+
+    def _on_mousewheel(self, event):
+        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
 
     def setup_ui(self):
         self.create_url_frame()
@@ -50,13 +77,120 @@ class CombinedAutomationApp:
         self.create_window_selection_frame()
         self.create_visualization_checkbox()
         self.on_action_type_change(None)
+        self.create_import_button()
+
+    def create_url_frame(self):
+        self.url_frame = tk.Frame(self.master)
+        self.url_frame.pack(pady=10, padx=10, fill=tk.X)
+        tk.Label(self.url_frame, text="URL:").pack(side=tk.LEFT)
+        self.url_entry = tk.Entry(self.url_frame, width=50)
+        self.url_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 0))
+        self.url_entry.insert(0, DEFAULT_URL)
+
+    def create_import_button(self):
+        self.import_button = ttk.Button(self.master, text="Import", command=self.import_actions)
+        self.import_button.pack(pady=10)
+
+    def import_actions(self):
+        file_path = filedialog.askopenfilename(
+            title="Select Actions File",
+            filetypes=(("All supported files", "*.txt *.py *.json"), ("All files", "*.*"))
+        )
+        if file_path:
+            try:
+                with open(file_path, 'r') as file:
+                    file_content = file.read()
+                    imported_actions = self.extract_actions(file_content)
+                
+                if not imported_actions:
+                    raise ValueError("No valid actions found in the file.")
+
+                # Clear existing actions
+                self.actions.clear()
+                self.action_list.delete(0, tk.END)
+                
+                # Add imported actions
+                for action in imported_actions:
+                    self.actions.append(action)
+                    display_text = self.get_display_text(action)
+                    self.action_list.insert(tk.END, display_text)
+                
+                self.renumber_actions()
+                messagebox.showinfo("Import Successful", f"Imported {len(imported_actions)} actions.")
+            except Exception as e:
+                messagebox.showerror("Import Error", f"An error occurred while importing actions:\n\n{str(e)}")
+
+    def extract_actions(self, content):
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            return self.extract_actions_from_python(content)
+
+    def extract_actions_from_python(self, content):
+        actions = []
+        in_actions_block = False
+        action_block = []
+        
+        for line in content.split('\n'):
+            line = line.strip()
+            if line.startswith('actions = ['):
+                in_actions_block = True
+                continue
+            elif in_actions_block and line.startswith(']'):
+                in_actions_block = False
+                break
+            elif in_actions_block:
+                action_block.append(line)
+
+        if action_block:
+            actions_str = '[' + ''.join(action_block) + ']'
+            try:
+                actions = json.loads(actions_str)
+            except json.JSONDecodeError:
+                raise ValueError("Unable to parse actions from the Python file.")
+
+        return actions
+
+
+    def get_display_text(self, action):
+        action_type = action.get('type', '').lower()
+        if action_type == "url":
+            return f"URL: {action.get('url', '')}"
+        elif action_type == "click":
+            return f"Click: {action.get('name', '')}"
+        elif action_type == "dropdown":
+            return f"Dropdown: {action.get('name', '')} (Reference: {action.get('text', '')})"
+        elif action_type == "input":
+            return f"Input: {action.get('name', '')} (Text: {action.get('text', '')})"
+        elif action_type == "sleep":
+            return f"Sleep: {action.get('duration', '')} ms"
+        elif action_type == "keypress":
+            return f"Keypress: {action.get('key', '')}"
+        elif action_type == "relative click":
+            return f"Relative Click: Anchor {action.get('anchor', '')}, Target {action.get('target', '')}, Direction: {action.get('direction', '')}"
+        elif action_type == "switch_window":
+            return f"Switch Window: {action.get('window_name', '')}"
+        elif action_type == "ask and input":
+            return f"Ask and input: {action.get('name', '')}"
+        elif action_type == "mouseover":
+            return f"MouseOver: {action.get('name', '')}"
+        else:
+            return f"Unknown action: {action_type}"
+
+    def create_webdriver_frame(self):
+        self.webdriver_frame = tk.Frame(self.master)
+        self.webdriver_frame.pack(pady=5, padx=10, fill=tk.X)
+        tk.Label(self.webdriver_frame, text="WebDriver Path:").pack(side=tk.LEFT)
+        self.webdriver_entry = tk.Entry(self.webdriver_frame, width=50)
+        self.webdriver_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 5))
+        self.webdriver_entry.insert(0, self.selenium_driver_path)
+        self.browse_button = tk.Button(self.webdriver_frame, text="Browse", command=self.browse_webdriver)
+        self.browse_button.pack(side=tk.RIGHT)
 
     def create_loop_frame(self):
         self.loop_frame = tk.Frame(self.master)
         self.loop_frame.pack(pady=10, padx=10, fill=tk.X)
-
-        ttk.Label(self.loop_frame, text="Loop Control:").grid(row=0, column=0, padx=5, pady=5)
-        
+        ttk.Label(self.loop_frame, text="Loop Control:").grid(row=0, column=0, padx=5, pady=5)    
         self.loop_start_button = ttk.Button(self.loop_frame, text="Start Loop", command=self.add_loop_start)
         self.loop_start_button.grid(row=0, column=1, padx=5, pady=5)
         
@@ -102,14 +236,6 @@ class CombinedAutomationApp:
                 return self.action_list.size()
         return self.action_list.size()
 
-    def create_url_frame(self):
-        self.url_frame = tk.Frame(self.master)
-        self.url_frame.pack(pady=10, padx=10, fill=tk.X)
-        tk.Label(self.url_frame, text="URL:").pack(side=tk.LEFT)
-        self.url_entry = tk.Entry(self.url_frame, width=50)
-        self.url_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 0))
-        self.url_entry.insert(0, DEFAULT_URL)
-
     def create_window_selection_frame(self):
         self.window_frame = tk.Frame(self.master)
         self.window_frame.pack(pady=10, padx=10, fill=tk.X)
@@ -153,25 +279,15 @@ class CombinedAutomationApp:
         self.detect_css()
 
     def update_copy_target(self):
-        # This method will be called when either checkbox is clicked
-        # It ensures that only one checkbox is checked at a time
-        if self.selector_check.instate(['selected']):
-            self.alternate_selector_check.state(['!alternate'])
-        elif self.alternate_selector_check.instate(['selected']):
-            self.selector_check.state(['!alternate'])
-
-    def create_webdriver_frame(self):
-        self.webdriver_frame = tk.Frame(self.master)
-        self.webdriver_frame.pack(pady=5, padx=10, fill=tk.X)
-
-        tk.Label(self.webdriver_frame, text="WebDriver Path:").pack(side=tk.LEFT)
-
-        self.webdriver_entry = tk.Entry(self.webdriver_frame, width=50)
-        self.webdriver_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 5))
-        self.webdriver_entry.insert(0, self.selenium_driver_path)
-
-        self.browse_button = tk.Button(self.webdriver_frame, text="Browse", command=self.browse_webdriver)
-        self.browse_button.pack(side=tk.RIGHT)
+        if self.selector_var.get():
+            self.alternate_selector_var.set(False)
+        else:
+            self.alternate_selector_var.set(True)
+        if not self.selector_var.get() and not self.alternate_selector_var.get():
+            self.selector_var.set(True)
+        self.selector_check.state(['selected' if self.selector_var.get() else '!selected'])
+        self.alternate_selector_check.state(['selected' if self.alternate_selector_var.get() else '!selected'])
+        self.update_selector_backgrounds()
 
     def browse_webdriver(self):
         filename = filedialog.askopenfilename(
@@ -184,25 +300,29 @@ class CombinedAutomationApp:
             self.selenium_driver_path = filename
 
     def create_start_button(self):
-        self.start_button = tk.Button(self.master, text="Start Detection", command=self.start_detection)
-        self.start_button.pack(pady=10)
+        self.button_frame = tk.Frame(self.master)
+        self.button_frame.pack(pady=10)
+        self.start_button = tk.Button(self.button_frame, text="Start Detection", command=self.start_detection)
+        self.start_button.pack(side=tk.LEFT, padx=5)
+        self.import_button = tk.Button(self.button_frame, text="Import", command=self.import_actions)
+        self.import_button.pack(side=tk.LEFT, padx=5)
 
     def create_selector_frame(self):
         self.selector_frame = tk.Frame(self.master, bd=2)
         self.selector_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        # Primary Selector Row
         primary_frame = tk.Frame(self.selector_frame)
         primary_frame.pack(fill=tk.X, expand=True)
-
+    
         tk.Label(primary_frame, text="Current CSS Selector:", anchor='w').pack(side=tk.LEFT, padx=5)
-
+    
         self.selector_display = tk.Entry(primary_frame, width=50, bg='black', fg='white')
         self.selector_display.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
-
-        self.selector_check = ttk.Checkbutton(primary_frame, command=self.update_copy_target)
+    
+        self.selector_var = tk.BooleanVar(value=True)
+        self.selector_check = ttk.Checkbutton(primary_frame, variable=self.selector_var, command=self.update_copy_target)
         self.selector_check.pack(side=tk.LEFT, padx=5)
-        self.selector_check.state(['selected']) 
+        self.selector_check.state(['!alternate'])
 
         # Alternate Selector Row
         alternate_frame = tk.Frame(self.selector_frame)
@@ -213,13 +333,23 @@ class CombinedAutomationApp:
         self.alternate_selector_display = tk.Entry(alternate_frame, width=50, bg='black', fg='white')
         self.alternate_selector_display.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
 
-        self.alternate_selector_check = ttk.Checkbutton(alternate_frame, command=self.update_copy_target)
+        self.alternate_selector_var = tk.BooleanVar(value=False)  # Set to False by default
+        self.alternate_selector_check = ttk.Checkbutton(alternate_frame, variable=self.alternate_selector_var, command=self.update_copy_target)
         self.alternate_selector_check.pack(side=tk.LEFT, padx=5)
-        self.alternate_selector_check.state(['!alternate'])  # Unchecked by default
+        self.alternate_selector_check.state(['!alternate']) 
 
         # Copy Status Label
         self.copy_status_label = tk.Label(self.master, text="", fg="green")
         self.copy_status_label.pack(pady=5)
+
+        self.update_selector_backgrounds()
+
+    def update_selector_backgrounds(self):
+        active_color = 'dark green'
+        inactive_color = 'black'
+    
+        self.selector_display.config(bg=active_color if self.selector_var.get() else inactive_color)
+        self.alternate_selector_display.config(bg=active_color if self.alternate_selector_var.get() else inactive_color)
 
     def create_action_frame(self):
         self.action_frame = tk.Frame(self.master)
@@ -507,7 +637,7 @@ class CombinedAutomationApp:
         elif action_type == "ask and input":
             self.text_label.grid_remove()
             self.text.grid_remove()
-        elif action_type == "MouseOver":
+        elif action_type == "mouseover":
             self.text_label.grid_remove()
             self.text.grid_remove()
         
@@ -1020,8 +1150,19 @@ if __name__ == "__main__":
             return None
 
     def on_closing(self):
-        self.stop_detection()
-        self.master.destroy()
+        try:
+            self.stop_detection()
+        except Exception as e:
+            print(f"Error during stop_detection: {e}")
+        
+        try:
+            self.master.destroy()
+        except Exception as e:
+            print(f"Error during master.destroy: {e}")
+        
+        # Force exit if needed
+        import sys
+        sys.exit(0)
 
 if __name__ == "__main__":
     root = tk.Tk()
