@@ -16,45 +16,96 @@ import os
 import logging
 
 # User Configuration Section
-SELENIUM_DRIVER_PATH = r'C:\Peter\msedgedriver.exe'  # Update this path
+SELENIUM_DRIVER_PATH = r'C:\Peter\msedgedriver.exe'
 DEFAULT_URL = "https://www.google.com"
 OUTPUT_FILE_NAME = "web_automation_script.py"
 
 class CombinedAutomationApp:
     def __init__(self, master):
         self.master = master
-        master.title("Web Automation Tool v7.3")
-        master.geometry("800x800")
-
-        self.selenium_driver_path = SELENIUM_DRIVER_PATH  # Add this line
-        
+        master.title("Web Automation Tool v7.6")
+        master.geometry("800x850")
+        self.selenium_driver_path = SELENIUM_DRIVER_PATH
+        self.enable_visualization = tk.BooleanVar()
         self.setup_ui()
         self.selector_check.state(['selected'])
         self.current_window = None
-        
         self.driver = None
         self.is_detecting = False
         self.current_selector = ""
         self.current_alternate_selector = ""
+        self.loop_start = None
+        self.loop_end = None
         self.actions = []
 
     def setup_ui(self):
         self.create_url_frame()
-        self.create_webdriver_frame()  # New frame for webdriver path
+        self.create_webdriver_frame()
         self.create_start_button()
         self.create_selector_frame()
         self.create_action_frame()
+        self.create_loop_frame()
         self.create_action_list()
         self.create_control_buttons()
         self.create_window_selection_frame()
+        self.create_visualization_checkbox()
         self.on_action_type_change(None)
+
+    def create_loop_frame(self):
+        self.loop_frame = tk.Frame(self.master)
+        self.loop_frame.pack(pady=10, padx=10, fill=tk.X)
+
+        ttk.Label(self.loop_frame, text="Loop Control:").grid(row=0, column=0, padx=5, pady=5)
+        
+        self.loop_start_button = ttk.Button(self.loop_frame, text="Start Loop", command=self.add_loop_start)
+        self.loop_start_button.grid(row=0, column=1, padx=5, pady=5)
+        
+        self.loop_end_button = ttk.Button(self.loop_frame, text="End Loop", command=self.add_loop_end)
+        self.loop_end_button.grid(row=0, column=2, padx=5, pady=5)
+        
+        ttk.Label(self.loop_frame, text="Repeat:").grid(row=0, column=3, padx=5, pady=5)
+        self.loop_repeat = ttk.Entry(self.loop_frame, width=5)
+        self.loop_repeat.grid(row=0, column=4, padx=5, pady=5)
+
+    def add_loop_start(self):
+        insert_position = self.get_insert_position()
+        self.loop_start = insert_position
+        self.action_list.insert(insert_position, f"{insert_position + 1}. --- Loop Start ---")
+        self.renumber_actions()
+
+    def add_loop_end(self):
+        if self.loop_start is None:
+            messagebox.showwarning("Warning", "Please add a loop start first!")
+            return
+        insert_position = self.get_insert_position()
+        if insert_position <= self.loop_start:
+            messagebox.showwarning("Warning", "Loop end must be after loop start!")
+            return
+        self.loop_end = insert_position
+        repeat = self.loop_repeat.get() or "1"
+        self.action_list.insert(insert_position, f"{insert_position + 1}. --- Loop End (Repeat: {repeat}) ---")
+        self.renumber_actions()
+        self.actions.insert(self.loop_start, {"type": "loop_start"})
+        self.actions.insert(self.loop_end + 1, {"type": "loop_end", "repeat": int(repeat)})
+        self.loop_start = None
+        self.loop_end = None
+        self.loop_repeat.delete(0, tk.END)
+
+
+    def get_insert_position(self):
+        insert_position = self.insert_position.get()
+        if insert_position:
+            try:
+                return int(insert_position) - 1
+            except ValueError:
+                messagebox.showwarning("Invalid Position", "Please enter a valid integer for the insert position.")
+                return self.action_list.size()
+        return self.action_list.size()
 
     def create_url_frame(self):
         self.url_frame = tk.Frame(self.master)
         self.url_frame.pack(pady=10, padx=10, fill=tk.X)
-
         tk.Label(self.url_frame, text="URL:").pack(side=tk.LEFT)
-
         self.url_entry = tk.Entry(self.url_frame, width=50)
         self.url_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 0))
         self.url_entry.insert(0, DEFAULT_URL)
@@ -62,14 +113,20 @@ class CombinedAutomationApp:
     def create_window_selection_frame(self):
         self.window_frame = tk.Frame(self.master)
         self.window_frame.pack(pady=10, padx=10, fill=tk.X)
-    
         tk.Label(self.window_frame, text="Active Window:").pack(side=tk.LEFT)
         self.window_dropdown = ttk.Combobox(self.window_frame, width=40)
         self.window_dropdown.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 5))
         self.window_dropdown.bind("<<ComboboxSelected>>", self.on_window_selected)
-    
         self.refresh_button = tk.Button(self.window_frame, text="Refresh", command=self.refresh_windows)
         self.refresh_button.pack(side=tk.RIGHT)
+
+    def create_visualization_checkbox(self):
+        self.visualization_check = ttk.Checkbutton(
+            self.master, 
+            text="Enable Action Visualization", 
+            variable=self.enable_visualization
+        )
+        self.visualization_check.pack(pady=5)
     
     def refresh_windows(self):
         if self.driver:
@@ -479,10 +536,11 @@ class CombinedAutomationApp:
         action_type = self.action_type.get().lower()
         selector = self.selector.get()
         text = self.text.get()
-        special_key = self.special_key.get()
-        special_key_input = self.special_key_input.get()
-        target = self.target.get()
-        direction = self.direction.get()
+        special_key = self.special_key.get() if hasattr(self, 'special_key') else ""
+        special_key_input = self.special_key_input.get() if hasattr(self, 'special_key_input') else ""
+    
+        action = {}
+        display_text = ""
     
         if action_type == "url":
             action = {"type": action_type, "url": text}
@@ -506,21 +564,21 @@ class CombinedAutomationApp:
                 return
         elif action_type == "keypress":
             key = special_key if special_key else text
-            if special_key in ["Shift", "Ctrl"] and special_key_input:
+            if special_key in ["Shift", "Ctrl", "Alt"] and special_key_input:
                 key = f"{special_key}+{special_key_input}"
             action = {"type": action_type, "key": key}
             display_text = f"Keypress: {key}"
         elif action_type == "relative click":
-            if not all([selector, target, direction]):
+            if not all([selector, text, special_key]):  # Assuming 'text' is used for target and 'special_key' for direction
                 messagebox.showwarning("Missing Information", "Please fill in all fields for Relative Click.")
                 return
             action = {
                 "type": action_type,
                 "anchor": selector,
-                "target": target,
-                "direction": direction
+                "target": text,
+                "direction": special_key
             }
-            display_text = f"Relative Click: Anchor {selector}, Target {target}, Direction: {direction}"
+            display_text = f"Relative Click: Anchor {selector}, Target {text}, Direction: {special_key}"
         elif action_type == "windows selector":
             action = {"type": "switch_window", "window_name": text}
             display_text = f"Switch Window: {text}"
@@ -534,21 +592,16 @@ class CombinedAutomationApp:
             messagebox.showwarning("Invalid Action", f"Unknown action type: {action_type}")
             return
     
-        insert_position = self.insert_position.get()
-        if insert_position:
-            try:
-                position = int(insert_position) - 1
-                self.actions.insert(position, action)
-                self.action_list.insert(position, f"{position + 1}. {display_text}")
-                self.renumber_actions()
-            except ValueError:
-                messagebox.showwarning("Invalid Position", "Please enter a valid integer for the insert position.")
-                return
-        else:
-            self.actions.append(action)
-            self.action_list.insert(tk.END, f"{self.action_list.size() + 1}. {display_text}")
-        
-        self.clear_input_fields()
+        if action and display_text:
+            insert_position = self.get_insert_position()
+            if insert_position is not None:
+                self.actions.insert(insert_position, action)
+                self.action_list.insert(insert_position, display_text)
+            else:
+                self.actions.append(action)
+                self.action_list.insert(tk.END, display_text)
+            self.renumber_actions()
+            self.clear_input_fields()
 
     def clear_input_fields(self):
         self.selector.delete(0, tk.END)
@@ -569,7 +622,11 @@ class CombinedAutomationApp:
     def renumber_actions(self):
         for i in range(self.action_list.size()):
             item = self.action_list.get(i)
-            new_item = f"{i + 1}. {item.split('. ', 1)[1]}"
+            if item[0].isdigit() and '. ' in item:
+                item_text = item.split('. ', 1)[-1]
+            else:
+                item_text = item
+            new_item = f"{i + 1}. {item_text}"
             self.action_list.delete(i)
             self.action_list.insert(i, new_item)
 
@@ -596,12 +653,11 @@ class CombinedAutomationApp:
                 if 'selector' in renamed_action:
                     renamed_action['name'] = renamed_action.pop('selector')
                 renamed_actions.append(renamed_action)
-            
             actions_json = json.dumps(renamed_actions, indent=4)
             script_id = uuid.uuid4().hex[:8]
             webdriver_path = self.webdriver_entry.get()
-    
-            # Define the main parts of the script
+            enable_visualization = self.enable_visualization.get()
+############################################
             imports = """
 import logging
 import time
@@ -623,7 +679,7 @@ from selenium.common.exceptions import TimeoutException, StaleElementReferenceEx
 from selenium.webdriver.support.relative_locator import locate_with
 from typing import Callable, Dict, Any, Union
 """
-
+############################################
             config = f"""
 # Configuration
 SCRIPT_ID = "{script_id}"
@@ -631,8 +687,7 @@ WEBDRIVER_PATH = r"{webdriver_path}"
 WAIT_TIME = 5
 RETRY_ATTEMPTS = 3
 DEBUG = True
-
-# Setup logging
+ENABLE_VISUALIZATION = {enable_visualization}
 DESKTOP_PATH = os.path.join(os.path.expanduser('~'), 'Desktop')
 LOG_FOLDER = os.path.join(DESKTOP_PATH, 'automation_log')
 if not os.path.exists(LOG_FOLDER):
@@ -647,7 +702,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 """
-
+############################################
             web_automation_class = """
 class WebAutomation:
     def __init__(self, driver_path: str):
@@ -710,6 +765,8 @@ class WebAutomation:
         try:
             element = WebDriverWait(self.driver, timeout).until(EC.element_to_be_clickable((by, name)))
             logger.info(f"Clicking element: {name}")
+            if ENABLE_VISUALIZATION:
+                self.highlight_element(element)
             element.click()
         except TimeoutException:
             logger.error(f"Element not clickable: {name}")
@@ -721,6 +778,8 @@ class WebAutomation:
             self.scroll_into_view(name)
             element = self.wait_for_element(name, EC.element_to_be_clickable)
             logger.info(f"Inputting text: {text}")
+            if ENABLE_VISUALIZATION:
+                self.highlight_element(element)
             element.clear()
             element.send_keys(text)
         else:
@@ -735,6 +794,8 @@ class WebAutomation:
         try:
             select = Select(dropdown)
             logger.info(f"Selecting option: {text}")
+            if ENABLE_VISUALIZATION:
+                self.highlight_element(dropdown)
             select.select_by_visible_text(text)
         except WebDriverException:
             # If it's not a <select> element, try to handle it as a custom dropdown
@@ -742,6 +803,8 @@ class WebAutomation:
             dropdown.click()
             time.sleep(0.05)  # Wait for dropdown to expand
             option = self.driver.find_element(By.XPATH, f"//*[contains(text(), '{text}')]")
+            if ENABLE_VISUALIZATION:
+                self.highlight_element(option)
             option.click()
 
     @retry_on_stale
@@ -749,6 +812,8 @@ class WebAutomation:
         self.scroll_into_view(name)
         element = self.wait_for_element(name, EC.presence_of_element_located)
         logger.info(f"Moving mouse over element: {name}")
+        if ENABLE_VISUALIZATION:
+            self.highlight_element(element)
         ActionChains(self.driver).move_to_element(element).perform()
 
     def wait_and_relative_click(self, anchor_name: str, target_name: str, direction: str) -> None:
@@ -757,6 +822,8 @@ class WebAutomation:
         logger.info(f"Clicking element relative to {anchor_name}: {direction}")
         relative_locator = getattr(locate_with(By.CSS_SELECTOR, target_name), direction)(anchor)
         relative_element = self.driver.find_element(relative_locator)
+        if ENABLE_VISUALIZATION:
+            self.highlight_element(relative_element)
         relative_element.click()
 
     def switch_to_window(self, window_name: str) -> None:
@@ -786,11 +853,29 @@ class WebAutomation:
             return f"{modifier_key}+{letter.lower()}"
         return special_keys.get(key, key)
 
-    def perform_action(self, action: Dict[str, Any]) -> None:
+    def highlight_element(self, element):
+        original_style = element.get_attribute('style')
+        self.driver.execute_script(
+            "arguments[0].setAttribute('style', arguments[1]);",
+            element,
+            "border: 2px solid red; background: yellow;"
+        )
+        time.sleep(0.5)  # Highlight for 0.5 seconds
+        self.driver.execute_script(
+            "arguments[0].setAttribute('style', arguments[1]);",
+            element,
+            original_style
+        )
+
+    def perform_action(self, action: Dict[str, Any]) -> str:
         action_type = action["type"]
         logger.info(f"Performing action: {action_type}")
         try:
-            if action_type == "url":
+            if action_type == "loop_start":
+                logger.info("Starting loop")
+            elif action_type == "loop_end":
+                logger.info(f"Ending loop (Repeat: {action['repeat']})")
+            elif action_type == "url":
                 self.driver.get(action["url"])
                 WebDriverWait(self.driver, WAIT_TIME).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
             elif action_type == "dropdown":
@@ -813,6 +898,8 @@ class WebAutomation:
                     ActionChains(self.driver).key_down(modifier).send_keys(letter).key_up(modifier).perform()
                 else:
                     active_element = self.driver.switch_to.active_element
+                    if ENABLE_VISUALIZATION:
+                        self.highlight_element(active_element)
                     active_element.send_keys(key)
             elif action_type == "relative click":
                 self.wait_and_relative_click(action["anchor"], action["target"], action["direction"])
@@ -826,9 +913,43 @@ class WebAutomation:
             else:
                 logger.warning(f"Unknown action type: {action_type}")
             time.sleep(0.05)  # Small delay between actions
+        except NoSuchElementException as e:
+            logger.error(f"Element not found: {e}")
+            choice = self.handle_element_not_found(action)
+            if choice == 'skip':
+                logger.info("Skipping to next action")
+                return
+            elif choice == 'retry':
+                logger.info("Retrying action")
+                self.perform_action(action)
+            elif choice == 'exit':
+                logger.info("Exiting script")
+                raise
+            return "success"
+        except NoSuchElementException as e:
+            logger.error(f"Element not found: {e}")
+            return self.handle_element_not_found(action)
         except Exception as e:
             logger.error(f"Error performing action {action_type}: {e}")
             raise
+
+    def handle_element_not_found(self, action: Dict[str, Any]) -> str:
+        root = tk.Tk()
+        root.withdraw()
+        element_name = action['name']
+        message = f'''ELEMENT NOT FOUND: <b>{element_name}</b>
+    What do you want to do?
+    
+    YES will skip this element and Continue
+    NO will exit this script'''
+        choice = messagebox.askquestion("Element Not Found", message, icon="warning")
+        root.destroy()
+        if choice == 'yes':
+            return 'skip'
+        elif choice == 'no':
+            return 'exit'
+        else:
+            return 'exit'
 
 def show_error_popup(error_message):
     root = tk.Tk()
@@ -846,8 +967,28 @@ def main():
 
         actions = {actions_json}
 
-        for action in actions:
-            automation.perform_action(action)
+        def execute_actions(start_index, end_index, repeat=1):
+            i = start_index
+            while i < end_index:
+                for _ in range(repeat):
+                    action = actions[i]
+                    if action['type'] == 'loop_start':
+                        loop_end = next(j for j in range(i + 1, len(actions)) if actions[j]['type'] == 'loop_end')
+                        execute_actions(i + 1, loop_end, actions[loop_end]['repeat'])
+                        i = loop_end
+                    elif action['type'] == 'loop_end':
+                        break
+                    else:
+                        result = automation.perform_action(action)
+                        if result == "retry":
+                            continue  # Retry the same action
+                        elif result == "exit":
+                            logger.info("User chose to exit the script")
+                            return  # Exit the script
+                        # If result is "skip" or "success", move to the next action
+                i += 1
+
+        execute_actions(0, len(actions))
         logger.info("Script execution completed successfully.")
     except Exception as e:
         logger.error(f"An error occurred: {e}")
