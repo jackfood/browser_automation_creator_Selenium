@@ -42,13 +42,17 @@ Web Automation Tool v1.7.86 is a powerful and user-friendly application designed
    python web_automation_tool.py
    ```
 2. Enter the URL you want to automate in the URL field.
-3. Click "Start Detection" to begin capturing actions.
-4. Interact with the webpage. The tool will record your actions.
-5. Use the action type dropdown and input fields to add or modify actions.
-6. Click "Add" to include an action in your script.
-7. Use "Remove" to delete unwanted actions.
-8. Adjust the order of actions using the "Insert Position" field.
-9. Click "Complete" to generate and save your automation script.
+3. Select your webdriver location if edge browser did not open successfully.
+4. Click "Start Detection" to begin capturing actions.
+5. Interact with the webpage. The tool will detect the element of the page.
+6. Press " ` " to copy the element into the form.
+7. . Use the action type dropdown and input fields to add or modify actions.
+8. Click "Add" to include an action in your script.
+9. Use "Remove" to delete unwanted actions.
+10. Adjust the order of actions using the "Insert Position" field.
+11. Click "Complete" to generate and save your automation script. (Defaulted to user's desktop)
+12. Run the script using python for automation of your recorded steps.
+13. Run python web_automation_tool.py to import the steps for future editing.
 
 ## Action Types
 
