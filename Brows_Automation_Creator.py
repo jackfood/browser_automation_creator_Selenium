@@ -7,6 +7,7 @@ from selenium.webdriver.edge.options import Options
 from selenium.common.exceptions import WebDriverException, NoSuchWindowException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.relative_locator import locate_with
+import pygetwindow as gw
 import pyperclip
 from urllib.parse import urlparse
 import uuid
@@ -15,17 +16,19 @@ import json
 import os
 import logging
 import ast
+import win32gui
+import win32con
 
 # User Configuration Section
-SELENIUM_DRIVER_PATH = r'C:\Peter\msedgedriver.exe'
+SELENIUM_DRIVER_PATH = r'D:\Edge Extension\Seleium WebDriver\msedgedriver.exe'
 DEFAULT_URL = "https://www.google.com"
-OUTPUT_FILE_NAME = "web_automation_script.py"
+OUTPUT_FILE_NAME = "web_automation_script.txt"
 
 class CombinedAutomationApp:
     def __init__(self, master):
         self.master = master
-        master.title("Web Automation Tool v7.8")
-        master.geometry("500x750")
+        master.title("Web Automation Tool v1.7.86")
+        master.geometry("500x1050")
 
         self.canvas = tk.Canvas(master)
         self.scrollbar = tk.Scrollbar(master, orient="vertical", command=self.canvas.yview)
@@ -44,9 +47,9 @@ class CombinedAutomationApp:
 
         self.selenium_driver_path = SELENIUM_DRIVER_PATH
         self.enable_visualization = tk.BooleanVar()  # Initialize here
+        self.insert_position = None
         self.setup_ui()
         self.selector_check.state(['selected'])
-        self.current_window = None
         self.driver = None
         self.is_detecting = False
         self.current_selector = ""
@@ -141,16 +144,15 @@ class CombinedAutomationApp:
                 break
             elif in_actions_block:
                 action_block.append(line)
-
+    
         if action_block:
             actions_str = '[' + ''.join(action_block) + ']'
             try:
-                actions = json.loads(actions_str)
-            except json.JSONDecodeError:
+                actions = ast.literal_eval(actions_str)
+            except (ValueError, SyntaxError):
                 raise ValueError("Unable to parse actions from the Python file.")
-
+    
         return actions
-
 
     def get_display_text(self, action):
         action_type = action.get('type', '').lower()
@@ -174,6 +176,8 @@ class CombinedAutomationApp:
             return f"Ask and input: {action.get('name', '')}"
         elif action_type == "mouseover":
             return f"MouseOver: {action.get('name', '')}"
+        elif action_type == "file dialog":
+            return f"File Dialog: {action.get('dialog_title', '')} (File: {action.get('file_path', '')}, Keys: {action.get('key_sequence', '')}, Text: {action.get('additional_text', '')})"
         else:
             return f"Unknown action: {action_type}"
 
@@ -310,12 +314,12 @@ class CombinedAutomationApp:
     def create_selector_frame(self):
         self.selector_frame = tk.Frame(self.master, bd=2)
         self.selector_frame.pack(fill=tk.X, padx=5, pady=5)
-
+    
+        # Primary Selector Row
         primary_frame = tk.Frame(self.selector_frame)
         primary_frame.pack(fill=tk.X, expand=True)
     
         tk.Label(primary_frame, text="Current CSS Selector:", anchor='w').pack(side=tk.LEFT, padx=5)
-    
         self.selector_display = tk.Entry(primary_frame, width=50, bg='black', fg='white')
         self.selector_display.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
     
@@ -323,46 +327,52 @@ class CombinedAutomationApp:
         self.selector_check = ttk.Checkbutton(primary_frame, variable=self.selector_var, command=self.update_copy_target)
         self.selector_check.pack(side=tk.LEFT, padx=5)
         self.selector_check.state(['!alternate'])
-
+    
         # Alternate Selector Row
         alternate_frame = tk.Frame(self.selector_frame)
         alternate_frame.pack(fill=tk.X, expand=True, pady=(5, 0))
-
+    
         tk.Label(alternate_frame, text="Alternate Selector:", anchor='w').pack(side=tk.LEFT, padx=5)
-
         self.alternate_selector_display = tk.Entry(alternate_frame, width=50, bg='black', fg='white')
         self.alternate_selector_display.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
-
-        self.alternate_selector_var = tk.BooleanVar(value=False)  # Set to False by default
+    
+        self.alternate_selector_var = tk.BooleanVar(value=False)
         self.alternate_selector_check = ttk.Checkbutton(alternate_frame, variable=self.alternate_selector_var, command=self.update_copy_target)
         self.alternate_selector_check.pack(side=tk.LEFT, padx=5)
         self.alternate_selector_check.state(['!alternate']) 
-
+    
         # Copy Status Label
         self.copy_status_label = tk.Label(self.master, text="", fg="green")
         self.copy_status_label.pack(pady=5)
-
+    
         self.update_selector_backgrounds()
-
+    
     def update_selector_backgrounds(self):
         active_color = 'dark green'
         inactive_color = 'black'
     
         self.selector_display.config(bg=active_color if self.selector_var.get() else inactive_color)
         self.alternate_selector_display.config(bg=active_color if self.alternate_selector_var.get() else inactive_color)
-
+    
     def create_action_frame(self):
         self.action_frame = tk.Frame(self.master)
         self.action_frame.pack(pady=10, padx=10, fill=tk.X)
     
-        self.action_types = ["Click", "Dropdown", "Input", "ask and input", "Windows Selector", "Keypress", "Sleep", "Relative Click", "URL", "mouseover"]
-        self.special_keys = ["", "Enter", "Tab", "Shift", "Ctrl", "Alt", "Esc", "Backspace", "Delete", "PageUp", "PageDown", "Home", "End", "Insert", "Up", "Down", "Left", "Right", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
+        self.action_types = [
+            "Click", "Dropdown", "Input", "ask and input", "Windows Selector",
+            "Keypress", "Sleep", "Relative Click", "URL", "File Dialog", "mouseover"
+        ]
+        self.special_keys = [
+            "", "Enter", "Tab", "Shift", "Ctrl", "Alt", "Esc", "Backspace", "Delete",
+            "PageUp", "PageDown", "Home", "End", "Insert", "Up", "Down", "Left", "Right",
+            "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"
+        ]
         self.relative_directions = ["above", "below", "toLeftOf", "toRightOf", "near"]
     
         ttk.Label(self.action_frame, text="Action Type:").grid(row=0, column=0, padx=5, pady=5)
         self.action_type = ttk.Combobox(self.action_frame, values=self.action_types)
         self.action_type.grid(row=0, column=1, padx=5, pady=5)
-        self.action_type.set("Click")  # Set default action type to "Click"
+        self.action_type.set("Click")
         self.action_type.bind("<<ComboboxSelected>>", self.on_action_type_change)
     
         self.selector_label = ttk.Label(self.action_frame, text="Selector:")
@@ -383,7 +393,7 @@ class CombinedAutomationApp:
     
         self.special_key_input = ttk.Entry(self.action_frame, width=5, state='disabled')
         self.special_key_input.grid(row=3, column=2, padx=5, pady=5)
-   
+    
         self.target_label = ttk.Label(self.action_frame, text="Target Selector:")
         self.target_label.grid(row=4, column=0, padx=5, pady=5)
         self.target = ttk.Entry(self.action_frame, width=50)
@@ -394,19 +404,72 @@ class CombinedAutomationApp:
         self.direction = ttk.Combobox(self.action_frame, values=self.relative_directions)
         self.direction.grid(row=5, column=1, padx=5, pady=5)
     
-        # Initially hide the new fields
-        self.target_label.grid_remove()
-        self.target.grid_remove()
-        self.direction_label.grid_remove()
-        self.direction.grid_remove()
+        self.file_path_entry = ttk.Entry(self.action_frame, width=40)
+        self.file_path_entry.grid(row=2, column=1, padx=5, pady=5)
+        self.file_path_entry.grid_remove()
     
+        self.browse_button = ttk.Button(self.action_frame, text="Browse", command=self.browse_file)
+        self.browse_button.grid(row=2, column=2, padx=5, pady=5)
+        self.browse_button.grid_remove()
+    
+        # Add new fields for file dialog
+        self.key_sequence_label = ttk.Label(self.action_frame, text="Key Sequence:")
+        self.key_sequence_label.grid(row=6, column=0, padx=5, pady=5)
+        self.key_sequence_entry = ttk.Entry(self.action_frame, width=50)
+        self.key_sequence_entry.grid(row=6, column=1, padx=5, pady=5)
+    
+        self.wait_time_label = ttk.Label(self.action_frame, text="Wait Time (s):")
+        self.wait_time_label.grid(row=7, column=0, padx=5, pady=5)
+        self.wait_time_entry = ttk.Entry(self.action_frame, width=10)
+        self.wait_time_entry.grid(row=7, column=1, padx=5, pady=5)
+        self.wait_time_entry.insert(0, "1")
+    
+        self.file_dialog_key_label = ttk.Label(self.action_frame, text="Special Key:")
+        self.file_dialog_key_label.grid(row=9, column=0, padx=5, pady=5)
+        self.file_dialog_key = ttk.Combobox(self.action_frame, values=self.special_keys)
+        self.file_dialog_key.grid(row=9, column=1, padx=5, pady=5)
+        self.file_dialog_key.bind("<<ComboboxSelected>>", self.on_file_dialog_key_change)
+        self.file_dialog_key_input = ttk.Entry(self.action_frame, width=5)
+        self.file_dialog_key_input.grid(row=9, column=2, padx=5, pady=5)
+    
+        self.file_dialog_text_label = ttk.Label(self.action_frame, text="Additional Text:")
+        self.file_dialog_text_label.grid(row=10, column=0, padx=5, pady=5)
+        self.file_dialog_text = ttk.Entry(self.action_frame, width=50)
+        self.file_dialog_text.grid(row=10, column=1, columnspan=2, padx=5, pady=5)
+
         self.add_button = ttk.Button(self.action_frame, text="Add", command=self.add_action)
-        self.add_button.grid(row=6, column=0, columnspan=2, pady=10)
+        self.add_button.grid(row=11, column=0, columnspan=2, pady=10)
+    
+        # Initially hide the file dialog specific fields
+        self.file_dialog_key_label.grid_remove()
+        self.file_dialog_key.grid_remove()
+        self.file_dialog_key_input.grid_remove()
+        self.file_dialog_text_label.grid_remove()
+        self.file_dialog_text.grid_remove()
+        self.key_sequence_label.grid_remove()
+        self.key_sequence_entry.grid_remove()
+        self.wait_time_label.grid_remove()
+        self.wait_time_entry.grid_remove()
+    
         self.on_action_type_change(None)
+
+    def on_file_dialog_key_change(self, event):
+        special_key = self.file_dialog_key.get()
+        if special_key in ["Shift", "Ctrl", "Alt"]:
+            self.file_dialog_key_input.config(state='normal')
+        else:
+            self.file_dialog_key_input.config(state='disabled')
+            self.file_dialog_key_input.delete(0, tk.END)
 
     def create_action_list(self):
         self.action_list = tk.Listbox(self.master, width=70, height=10, selectmode=tk.SINGLE)
         self.action_list.pack(padx=5, pady=5)
+
+    def browse_file(self):
+        file_path = filedialog.askopenfilename()
+        if file_path:
+            self.file_path_entry.delete(0, tk.END)
+            self.file_path_entry.insert(0, file_path)
 
     def create_control_buttons(self):
         self.remove_button = ttk.Button(self.master, text="Remove", command=self.remove_action)
@@ -442,7 +505,7 @@ class CombinedAutomationApp:
                 self.start_button.config(text="Stop Detection")
                 self.inject_mouse_move_script()
                 self.detect_css_wrapper()  # Use the wrapper to keep detecting CSS
-                keyboard.on_press_key('ctrl', self.copy_to_clipboard)
+                keyboard.on_press_key('`', self.copy_to_clipboard)
                 # Automatically add URL action
                 self.add_url_action(url)
                 # Force focus back to the Tkinter window
@@ -583,7 +646,8 @@ class CombinedAutomationApp:
 
     def on_action_type_change(self, event):
         action_type = self.action_type.get()
-        
+        # Clear all fields except for File Dialog's dialog title
+        self.clear_input_fields()
         # Reset all fields and labels
         self.selector_label.config(text="Selector:")
         self.text_label.config(text="Text:")
@@ -598,6 +662,12 @@ class CombinedAutomationApp:
         self.target.grid_remove()
         self.direction_label.grid_remove()
         self.direction.grid_remove()
+        self.file_path_entry.grid_remove()
+        self.browse_button.grid_remove()
+        self.key_sequence_label.grid_remove()
+        self.key_sequence_entry.grid_remove()
+        self.wait_time_label.grid_remove()
+        self.wait_time_entry.grid_remove()
         self.text.config(state='normal')
     
         if action_type == "URL":
@@ -640,6 +710,25 @@ class CombinedAutomationApp:
         elif action_type == "mouseover":
             self.text_label.grid_remove()
             self.text.grid_remove()
+        if action_type == "File Dialog":
+            self.selector_label.config(text="Dialog Title:")
+            self.text_label.config(text="File Path:")
+            self.file_path_entry.grid()
+            self.browse_button.grid()
+            self.wait_time_label.grid()
+            self.wait_time_entry.grid()
+            self.file_dialog_key_label.grid()
+            self.file_dialog_key.grid()
+            self.file_dialog_key_input.grid()
+            self.file_dialog_text_label.grid()
+            self.file_dialog_text.grid()
+        else:
+            self.selector.delete(0, tk.END)
+            self.file_dialog_key_label.grid_remove()
+            self.file_dialog_key.grid_remove()
+            self.file_dialog_key_input.grid_remove()
+            self.file_dialog_text_label.grid_remove()
+            self.file_dialog_text.grid_remove()
         
         # Clear all input fields
         self.selector.delete(0, tk.END)
@@ -648,10 +737,14 @@ class CombinedAutomationApp:
         self.special_key_input.delete(0, tk.END)
         self.target.delete(0, tk.END)
         self.direction.set("")
+        self.file_path_entry.delete(0, tk.END)
+        self.key_sequence_entry.delete(0, tk.END)
+        self.wait_time_entry.delete(0, tk.END)
+        self.wait_time_entry.insert(0, "0.1")  # Reset to default wait time
 
     def on_special_key_change(self, event):
         special_key = self.special_key.get()
-        if special_key in ["Shift", "Ctrl"]:
+        if special_key in ["Shift", "Ctrl", "Alt"]:
             self.special_key_input.config(state='normal')
             self.special_key_input.grid(row=3, column=2, padx=5, pady=5)
             self.text.config(state='disabled')
@@ -718,10 +811,28 @@ class CombinedAutomationApp:
         elif action_type == "mouseover":
             action = {"type": action_type, "selector": selector}
             display_text = f"MouseOver: {selector}"
-        else:
-            messagebox.showwarning("Invalid Action", f"Unknown action type: {action_type}")
-            return
+        elif action_type == "file dialog":
+            special_key = self.file_dialog_key.get()
+            special_key_input = self.file_dialog_key_input.get()
+            additional_text = self.file_dialog_text.get()
     
+            if special_key in ["Shift", "Ctrl", "Alt"] and special_key_input:
+                key_sequence = f"{special_key}+{special_key_input}"
+            elif special_key:
+                key_sequence = special_key
+            else:
+                key_sequence = ""
+    
+            action = {
+                "type": action_type,
+                "dialog_title": selector,
+                "file_path": self.file_path_entry.get(),
+                "key_sequence": key_sequence,
+                "additional_text": additional_text,
+                "wait_time": float(self.wait_time_entry.get())
+            }
+            display_text = f"File Dialog: {selector} (File: {self.file_path_entry.get()}, Keys: {key_sequence}, Text: {additional_text})"
+        
         if action and display_text:
             insert_position = self.get_insert_position()
             if insert_position is not None:
@@ -734,11 +845,20 @@ class CombinedAutomationApp:
             self.clear_input_fields()
 
     def clear_input_fields(self):
-        self.selector.delete(0, tk.END)
+        current_action_type = self.action_type.get()
+        
+        if current_action_type != "File Dialog":
+            self.selector.delete(0, tk.END)
+        
         self.text.delete(0, tk.END)
         self.special_key.set("")
-        self.special_key_input.delete(0, tk.END)
-        self.insert_position.delete(0, tk.END)
+        self.special_key_input.delete(0, tk.END)      
+        self.file_path_entry.delete(0, tk.END)
+        self.file_dialog_key.set("")
+        self.file_dialog_key_input.delete(0, tk.END)
+        self.file_dialog_text.delete(0, tk.END)
+        self.wait_time_entry.delete(0, tk.END)
+        self.wait_time_entry.insert(0, "0.1")  # Reset to default wait time
 
     def remove_action(self):
         try:
@@ -808,13 +928,18 @@ from selenium.webdriver.edge.options import Options
 from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, WebDriverException, NoSuchElementException
 from selenium.webdriver.support.relative_locator import locate_with
 from typing import Callable, Dict, Any, Union
+from pywinauto.application import Application
+from pywinauto.keyboard import send_keys
+import pyautogui
+import win32gui
+import win32com.client
 """
 ############################################
             config = f"""
 # Configuration
 SCRIPT_ID = "{script_id}"
 WEBDRIVER_PATH = r"{webdriver_path}"
-WAIT_TIME = 5
+WAIT_TIME = 1
 RETRY_ATTEMPTS = 3
 DEBUG = True
 ENABLE_VISUALIZATION = {enable_visualization}
@@ -957,11 +1082,11 @@ class WebAutomation:
         relative_element.click()
 
     def switch_to_window(self, window_name: str) -> None:
-        logger.info(f"Switching to window: {window_name}")
+        logger.info(f"Switching to window: {{window_name}}")
         for handle in self.driver.window_handles:
             self.driver.switch_to.window(handle)
             if window_name in self.driver.title or window_name == handle:
-                logger.info(f"Switched to window: {self.driver.title}")
+                logger.info(f"Switched to window: {{self.driver.title}}")
                 return
         logger.error(f"Window not found: {window_name}")
         raise NoSuchElementException(f"Window not found: {window_name}")
@@ -996,6 +1121,97 @@ class WebAutomation:
             element,
             original_style
         )
+
+    def handle_file_dialog(self, action: Dict[str, Any]) -> None:
+        dialog_title = action.get("dialog_title", "Open")
+        file_path = action["file_path"]
+        key_sequence = action["key_sequence"]
+        additional_text = action["additional_text"]
+        wait_time = action["wait_time"]
+    
+        logger.info(f"Handling file dialog: {dialog_title}")
+        logger.info(f"File path: {file_path}")
+        logger.info(f"Key sequence: {key_sequence}")
+        logger.info(f"Additional text: {additional_text}")
+    
+        try:
+            # Wait for the dialog to appear
+            time.sleep(wait_time)
+    
+            # Connect to the dialog using the win32 backend
+            app = Application(backend="win32").connect(title=dialog_title, visible_only=False)
+            dlg = app.window(title=dialog_title)
+            dlg.set_focus()
+    
+            # Define a mapping for special key sequences
+            special_keys = {
+                'Alt+D': ('alt', 'd'),
+                'Ctrl+A': ('ctrl', 'a'),
+                'Ctrl+C': ('ctrl', 'c'),
+                'Ctrl+V': ('ctrl', 'v'),
+                'Shift+Tab': ('shift', 'tab'),
+                'Tab': 'tab',
+                'Enter': 'enter',
+                'Down': 'down',
+                'Up': 'up',
+                'Left': 'left',
+                'Right': 'right',
+                'Esc': 'esc',
+                'Backspace': 'backspace',
+                'Delete': 'delete',
+                'PageUp': 'pageup',
+                'PageDown': 'pagedown',
+                'Home': 'home',
+                'End': 'end',
+                'Insert': 'insert',
+                'F1': 'f1',
+                'F2': 'f2',
+                'F3': 'f3',
+                'F4': 'f4',
+                'F5': 'f5',
+                'F6': 'f6',
+                'F7': 'f7',
+                'F8': 'f8',
+                'F9': 'f9',
+                'F10': 'f10',
+                'F11': 'f11',
+                'F12': 'f12',
+                # Add other combinations as needed
+            }
+    
+            # Send the key sequence if it's in the mapping
+            if key_sequence in special_keys:
+                keys = special_keys[key_sequence]
+                if isinstance(keys, tuple):
+                    for key in keys:
+                        pyautogui.press(key)
+                else:
+                    pyautogui.press(keys)
+            else:
+                pyautogui.press(key_sequence)
+    
+            # Send additional text if any
+            if additional_text:
+                time.sleep(0.1)
+                # Split the additional text into individual characters and send them one by one
+                for char in additional_text:
+                    pyautogui.press(char)
+    
+            time.sleep(0.2)
+            pyautogui.press('enter')
+    
+            logger.info("File dialog interaction completed")
+    
+        except Exception as e:
+            logger.error(f"Error handling file dialog: {e}")
+            logger.error(traceback.format_exc())
+            # Optionally, you can add a user prompt to decide whether to continue or exit
+            # For now, we'll just log the error and continue
+    
+        finally:
+            # Switch back to the browser window
+            self.driver.switch_to.window(self.driver.window_handles[0])
+            logger.info("Switched back to the browser window")
 
     def perform_action(self, action: Dict[str, Any]) -> str:
         action_type = action["type"]
@@ -1040,6 +1256,8 @@ class WebAutomation:
                 self.ask_and_input(action["name"], action["prompt"])
             elif action_type == "mouseover":
                 self.wait_and_mouseover(action["name"])
+            elif action_type == "file dialog":
+                self.handle_file_dialog(action)
             else:
                 logger.warning(f"Unknown action type: {action_type}")
             time.sleep(0.05)  # Small delay between actions
@@ -1131,7 +1349,7 @@ def main():
             while True:
                 if keyboard.is_pressed('F10'):
                     break
-                time.sleep(0.2)
+                time.sleep(5)
             automation.driver.quit()
         logger.info(f"Log file saved as {LOG_FILE}")
 
